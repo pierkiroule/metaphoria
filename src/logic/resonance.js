@@ -2,6 +2,25 @@ import echoesData from '../data/echoesreso.json';
 
 const HISTORY_KEY = 'metaphoria-history';
 
+function safeReadList(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.warn('Unable to read local history', err);
+    return [];
+  }
+}
+
+function safeWriteList(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (err) {
+    console.warn('Unable to persist history', err);
+  }
+}
+
 function toSeed(text) {
   return (text || '').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) || 1;
 }
@@ -25,13 +44,13 @@ function stableShuffle(list, seed) {
 }
 
 function recordHistory(entry) {
-  const existing = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+  const existing = safeReadList(HISTORY_KEY);
   existing.unshift(entry);
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(existing.slice(0, 20)));
+  safeWriteList(HISTORY_KEY, existing.slice(0, 20));
 }
 
 export function getHistory() {
-  return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+  return safeReadList(HISTORY_KEY);
 }
 
 export function computeResonance(keywords, dataset = echoesData) {

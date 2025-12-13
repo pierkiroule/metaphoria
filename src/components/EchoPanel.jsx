@@ -3,11 +3,22 @@ import React, { useEffect, useState } from 'react';
 const FAVORITES_KEY = 'metaphoria-favorites';
 
 function loadFavorites() {
-  return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+  try {
+    const raw = localStorage.getItem(FAVORITES_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.warn('Unable to read favorites', err);
+    return [];
+  }
 }
 
 function saveFavorites(list) {
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify(list));
+  try {
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(list));
+  } catch (err) {
+    console.warn('Unable to persist favorites', err);
+  }
 }
 
 export default function EchoPanel({ echoes, onReset }) {

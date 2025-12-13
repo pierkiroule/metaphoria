@@ -1,0 +1,51 @@
+.prompt-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.prompt-controls {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.prompt-select {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: #dfe7f1;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.prompt-select select {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #eef1f4;
+  padding: 0.5rem 0.75rem;
+}
+
+.prompt-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+
+.prompt-preview {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 0.85rem;
+}
+
+.prompt-preview pre {
+  white-space: pre-wrap;
+  text-align: left;
+  margin: 0;
+  color: #e3edf7;
+  font-family: 'Fira Code', 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+}

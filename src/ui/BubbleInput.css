@@ -1,0 +1,55 @@
+.bubble-input {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.bubble-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.bubble-field {
+  flex: 1;
+  padding: 0.85rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: #eef1f4;
+  font-size: 1rem;
+}
+
+.bubble-field:focus {
+  outline: 2px solid #8fd0ff;
+}
+
+.bubble-send {
+  border: none;
+  background: linear-gradient(135deg, #6ae8d7, #5aa0ff);
+  color: #0b1a2a;
+  font-weight: 700;
+  border-radius: 12px;
+  padding: 0.85rem 1.25rem;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.bubble-send:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 30px rgba(106, 232, 215, 0.35);
+}
+
+.bubble-tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.bubble-token {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.3rem 0.7rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  letter-spacing: 0.3px;
+}

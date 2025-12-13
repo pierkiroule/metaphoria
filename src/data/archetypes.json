@@ -1,0 +1,6 @@
+[
+  { "name": "Gardien·ne", "qualities": ["protection", "veille", "accueil"], "emoji": "🛡️" },
+  { "name": "Explorateur·rice", "qualities": ["curiosité", "ouverture", "périple"], "emoji": "🧭" },
+  { "name": "Alchimiste", "qualities": ["transformation", "écoute", "transmission"], "emoji": "⚗️" },
+  { "name": "Jardinier·e", "qualities": ["patience", "entretien", "cycle"], "emoji": "🌱" }
+]

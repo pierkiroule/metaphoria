@@ -1,0 +1,17 @@
+{
+  "eau": ["flux", "profondeur", "lâcher-prise"],
+  "feu": ["désir", "transformation", "élan"],
+  "terre": ["ancrage", "stabilité", "gestation"],
+  "air": ["respiration", "échange", "élan vital"],
+  "ombre": ["refuge", "peur", "gestation"],
+  "forêt": ["abri", "chemin", "seuil"],
+  "roche": ["solidité", "résilience", "patience"],
+  "orage": ["catharsis", "clarification", "libération"],
+  "lune": ["cycle", "intuition", "reflet"],
+  "soleil": ["rayonnement", "chaleur", "élan"],
+  "oiseau": ["élévation", "vision", "messager"],
+  "océan": ["immensité", "mouvement", "mystère"],
+  "racines": ["origine", "nourriture", "mémoire"],
+  "brume": ["suspension", "ambiguïté", "attente"],
+  "clairière": ["ouverture", "repos", "découverte"]
+}

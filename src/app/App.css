@@ -1,0 +1,83 @@
+.app-shell {
+  padding: 2rem clamp(1rem, 4vw, 3rem);
+  max-width: 1200px;
+  margin: 0 auto 3rem;
+  color: #eef1f4;
+}
+
+.app-hero {
+  background: linear-gradient(135deg, rgba(90, 160, 255, 0.25), rgba(106, 232, 215, 0.2));
+  border-radius: 18px;
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0 0 0.35rem;
+}
+
+.app-hero h1 {
+  margin: 0;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+}
+
+.lede {
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 0.5rem;
+  max-width: 620px;
+}
+
+.pillars {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.pillars span {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 0.35rem 0.7rem;
+  border-radius: 12px;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.app-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  padding: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.card h2 {
+  margin: 0;
+}
+
+.card.wide {
+  grid-column: 1 / -1;
+}
+
+body {
+  background: radial-gradient(circle at 10% 20%, #13243a, #0b1421 35%, #0a101a 80%);
+}
+
+* {
+  box-sizing: border-box;
+}

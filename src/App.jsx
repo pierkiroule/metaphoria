@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import './App.css'
+import { generateMetaphoricEcho } from './metaphoricEcho'
 
 const baseWords = ['brume', 'souffle', 'nuit', 'reflet']
 
@@ -14,6 +15,8 @@ function App() {
       `Entre ${words.slice(0, 3).join(', ')} et ${words[words.length - 1]}, cherche une vibration douce, presque silencieuse.`,
     [words],
   )
+
+  const metaphoricEcho = useMemo(() => generateMetaphoricEcho(words), [words])
 
   const handleSubmit = (event) => {
     event.preventDefault()
@@ -129,6 +132,35 @@ function App() {
             <div className="prompt-section">
               <p className="section-label">Écho symbolique</p>
               <p className="prompt-text">{echoedPrompt}</p>
+            </div>
+            <div className="prompt-section">
+              <p className="section-label">Thème métaphorique</p>
+              <p className="prompt-text metaphor-theme">
+                <span className="metaphor-emoji" aria-hidden>
+                  {metaphoricEcho.emoji}
+                </span>
+                {metaphoricEcho.theme}
+              </p>
+            </div>
+            <div className="prompt-section">
+              <p className="section-label">Tags</p>
+              <div className="chip-row">
+                {metaphoricEcho.tags.map((tag, index) => (
+                  <span key={`${tag}-${index}`} className="chip subtle-chip">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="prompt-section">
+              <p className="section-label">Punchlines métaphoriques</p>
+              <ul className="punchline-list">
+                {metaphoricEcho.punchlines.map((line, index) => (
+                  <li key={`${line}-${index}`} className="prompt-text punchline-line">
+                    {line}
+                  </li>
+                ))}
+              </ul>
             </div>
             <div className="prompt-section prompt-actions">
               <div>

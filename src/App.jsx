@@ -12,6 +12,12 @@ export default function App() {
   const [activeTags, setActiveTags] = useState([]);
 
   const history = useMemo(() => getHistory(), [mode, currentEchoes]);
+  const totalTags = useMemo(() => {
+    const set = new Set();
+    echoesData.forEach((echo) => echo.tags.forEach((tag) => set.add(tag)));
+    return set.size;
+  }, []);
+  const heroSignal = history[0]?.keywords.join(' • ') || 'Prêt à tisser un nouvel écho';
 
   const handleLaunch = (text) => {
     const keywords = extractKeywords(text);
@@ -30,22 +36,69 @@ export default function App() {
   return (
     <main className="app">
       <div className="stars" aria-hidden />
-      <header>
-        <h1>Echo from Metaphoria</h1>
-        <p>Dépose des mots, laisse la bulle s'envoler, observe les échos.</p>
+      <header className="hero">
+        <div className="hero__copy">
+          <span className="pill">Nouvelle page d&apos;accueil</span>
+          <h1>Echo from Metaphoria</h1>
+          <p className="hero__lede">
+            Dépose tes mots, lance une bulle et observe la cartographie poétique qui en
+            découle. Tout est en temps réel, tout est relié.
+          </p>
+          <div className="hero__actions">
+            <span className="glass-tag">Lance ta bulle</span>
+            <span className="glass-tag">{echoesData.length} échos à explorer</span>
+            <span className="glass-tag">{totalTags} tags interconnectés</span>
+          </div>
+        </div>
+        <div className="hero__card">
+          <p className="card-kicker">Signal en direct</p>
+          <h3>{heroSignal}</h3>
+          <p className="muted">Chaque bulle nourrit la constellation. Sélectionne les mots qui résonnent.</p>
+          <div className="stat-grid">
+            <div className="stat">
+              <strong>{history.length}</strong>
+              <span>traces archivées</span>
+            </div>
+            <div className="stat">
+              <strong>{echoesData.length}</strong>
+              <span>échos disponibles</span>
+            </div>
+            <div className="stat">
+              <strong>{totalTags}</strong>
+              <span>constellations actives</span>
+            </div>
+          </div>
+        </div>
       </header>
 
       {mode === 'input' && (
-        <section className="stage">
-          <BubbleInput onLaunch={handleLaunch} />
+        <section className="stage stage-grid">
+          <div className="stage-panel">
+            <BubbleInput onLaunch={handleLaunch} />
+            <p className="stage-helper">Glisse vers le haut pour faire voyager tes mots.</p>
+          </div>
           <div className="history">
-            <h3>Dernières traces</h3>
+            <div className="history__header">
+              <div>
+                <p className="pill pill--ghost">Flux récent</p>
+                <h3>Dernières traces</h3>
+              </div>
+              <span className="muted">{history.length} enregistrements</span>
+            </div>
             {history.length === 0 && <p className="muted">Rien encore. Laisse ton premier écho.</p>}
-            {history.slice(0, 5).map((item) => (
-              <p key={item.timestamp} className="muted">
-                {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — {item.keywords.join(', ') || '...'}
-              </p>
-            ))}
+            <ul className="timeline">
+              {history.slice(0, 5).map((item) => (
+                <li key={item.timestamp}>
+                  <div className="dot" aria-hidden />
+                  <div>
+                    <p className="timestamp">
+                      {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                    <p className="muted keywords">{item.keywords.join(' · ') || '...'}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
       )}

@@ -18,6 +18,9 @@ npm run build
 2. Copier le contenu du dossier `dist` vers la branche `gh-pages` du dépôt GitHub.
 3. Activer GitHub Pages sur la branche `gh-pages` (dossier racine).
 
+> ℹ️ La config Vite définit `base` sur `/metaphoria/` et utilise des URLs relatives pour les assets PWA afin que les chemins
+> générés correspondent au sous-dossier GitHub Pages du dépôt.
+
 L'app restera utilisable hors-ligne grâce au service worker généré par `vite-plugin-pwa`.
 
 ## Icônes PWA

@@ -46,52 +46,70 @@ const EMOJI_PALETTE = ['🌙', '🚀', '🌳', '🌊', '🔥', '🪶', '✨', '�
 
 const SAMPLE_ENTRIES = [
   {
-    id: 'entry-1',
-    timestamp: Date.now() - 1000 * 60 * 60 * 7,
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 7).toISOString(),
     text: 'Je cherche du calme et un nouvel élan pour respirer.',
     emoji: '🌙',
     tags: ['calme', 'respiration', 'élan'],
   },
   {
-    id: 'entry-2',
-    timestamp: Date.now() - 1000 * 60 * 60 * 5,
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
     text: 'Je sens mes racines et une braise qui chauffe doucement.',
     emoji: '🌳',
     tags: ['racines', 'braise', 'douceur'],
   },
   {
-    id: 'entry-3',
-    timestamp: Date.now() - 1000 * 60 * 60 * 3,
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
     text: 'Une flamme crépite, j ai envie de danser et de partir loin.',
     emoji: '🔥',
     tags: ['flamme', 'envie', 'danser', 'voyage'],
   },
   {
-    id: 'entry-4',
-    timestamp: Date.now() - 1000 * 60 * 60 * 2,
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
     text: 'Le vent salé transporte une chanson d eau et de lumière.',
     emoji: '🌊',
     tags: ['vent', 'mer', 'lumière', 'énergie'],
   },
   {
-    id: 'entry-5',
-    timestamp: Date.now() - 1000 * 60 * 20,
+    timestamp: new Date(Date.now() - 1000 * 60 * 20).toISOString(),
     text: 'Je respire, je m ancre, j écris pour me souvenir.',
     emoji: '🪶',
     tags: ['respiration', 'ancrage', 'écrire', 'mémoire'],
   },
 ]
 
+function hashEntryId(timestamp, text) {
+  const base = `${timestamp}::${text}`
+  let hash = 0
+  for (let i = 0; i < base.length; i += 1) {
+    hash = (hash * 31 + base.charCodeAt(i)) >>> 0
+  }
+  return `entry-${hash.toString(16)}`
+}
+
+function normalizeEntry(entry) {
+  if (!entry) return null
+  const timestamp = entry.timestamp ? new Date(entry.timestamp).toISOString() : new Date().toISOString()
+  const text = entry.text || ''
+  const id = entry.id || hashEntryId(timestamp, text)
+  return {
+    id,
+    timestamp,
+    text,
+    emoji: entry.emoji || null,
+    tags: entry.tags || null,
+  }
+}
+
 function loadEntries() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return SAMPLE_ENTRIES
+    if (!raw) return SAMPLE_ENTRIES.map(normalizeEntry)
     const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return SAMPLE_ENTRIES
-    return parsed
+    if (!Array.isArray(parsed)) return SAMPLE_ENTRIES.map(normalizeEntry)
+    return parsed.map((item) => normalizeEntry(item)).filter(Boolean)
   } catch (error) {
     console.error('Impossible de charger les entrées locales', error)
-    return SAMPLE_ENTRIES
+    return SAMPLE_ENTRIES.map(normalizeEntry)
   }
 }
 
@@ -254,12 +272,16 @@ function App() {
   const [entries, setEntries] = useState(() => loadEntries())
   const [sourceDraft, setSourceDraft] = useState('')
   const [focusedEmojiId, setFocusedEmojiId] = useState(null)
+  const [showMemory, setShowMemory] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [editText, setEditText] = useState('')
+  const [editTimestamp, setEditTimestamp] = useState('')
+  const [previousEntries, setPreviousEntries] = useState(null)
+  const [timeCursor, setTimeCursor] = useState(null)
 
   useEffect(() => {
     persistEntries(entries)
   }, [entries])
-
-  const graphData = useMemo(() => buildGraph(entries), [entries])
 
   const handleSubmit = (event) => {
     event.preventDefault()
@@ -267,10 +289,65 @@ function App() {
     if (!text) return
     const tags = extractTags(text)
     const suggested = suggestEmojis(tags)
-    const id = `entry-${Date.now()}`
-    const entry = { id, timestamp: Date.now(), text, emoji: suggested[0] || null, tags }
+    const timestamp = new Date().toISOString()
+    const entry = normalizeEntry({
+      id: hashEntryId(timestamp, text),
+      timestamp,
+      text,
+      emoji: suggested[0] || null,
+      tags,
+    })
+    setPreviousEntries(entries.map((item) => ({ ...item })))
     setEntries((prev) => [...prev, entry])
     setSourceDraft('')
+  }
+
+  const handleEditStart = (entry) => {
+    setEditingId(entry.id)
+    setEditText(entry.text)
+    setEditTimestamp(entry.timestamp || new Date().toISOString())
+    setShowMemory(true)
+  }
+
+  const handleEditSave = () => {
+    const cleaned = editText.trim()
+    if (!cleaned || !editingId) return
+    const updatedTags = extractTags(cleaned)
+    const suggestedEmoji = suggestEmojis(updatedTags)[0] || null
+    setPreviousEntries(entries.map((item) => ({ ...item })))
+    setEntries((prev) =>
+      prev.map((item) =>
+        item.id === editingId
+          ? normalizeEntry({
+              ...item,
+              id: hashEntryId(editTimestamp || item.timestamp, cleaned),
+              text: cleaned,
+              timestamp: editTimestamp || item.timestamp,
+              tags: updatedTags,
+              emoji: item.emoji || suggestedEmoji,
+            })
+          : item
+      )
+    )
+    setEditingId(null)
+  }
+
+  const handleDelete = (id) => {
+    const confirmed = window.confirm('Supprimer cette trace ?')
+    if (!confirmed) return
+    setPreviousEntries(entries.map((item) => ({ ...item })))
+    setEntries((prev) => prev.filter((item) => item.id !== id))
+    if (editingId === id) {
+      setEditingId(null)
+      setEditText('')
+    }
+  }
+
+  const handleUndo = () => {
+    if (previousEntries) {
+      setEntries(previousEntries)
+      setPreviousEntries(null)
+    }
   }
 
   const handleNodeTap = (node) => {
@@ -278,6 +355,18 @@ function App() {
       setFocusedEmojiId(node.id)
     }
   }
+
+  const sortedEntries = useMemo(
+    () => [...entries].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()),
+    [entries]
+  )
+
+  const effectiveEntries = useMemo(() => {
+    if (!timeCursor) return sortedEntries
+    return sortedEntries.filter((entry) => new Date(entry.timestamp).getTime() <= timeCursor)
+  }, [sortedEntries, timeCursor])
+
+  const graphData = useMemo(() => buildGraph(effectiveEntries), [effectiveEntries])
 
   const nodeMap = useMemo(
     () => new Map(graphData.nodes.map((node) => [node.id, node])),
@@ -361,6 +450,32 @@ function App() {
         </div>
       </div>
 
+      <div className="control-row">
+        <button type="button" className="ghost" onClick={() => setShowMemory(true)}>
+          Mémoire vivante
+        </button>
+        {sortedEntries.length > 1 && (
+          <div className="timeline">
+            <label htmlFor="timeRange">⏳ Machine à remonter le temps</label>
+            <input
+              id="timeRange"
+              type="range"
+              min={new Date(sortedEntries[0].timestamp).getTime()}
+              max={new Date(sortedEntries[sortedEntries.length - 1].timestamp).getTime()}
+              value={timeCursor || new Date(sortedEntries[sortedEntries.length - 1].timestamp).getTime()}
+              onChange={(event) => setTimeCursor(Number(event.target.value))}
+            />
+            <div className="timeline-meta">
+              <span>{new Date(sortedEntries[0].timestamp).toLocaleDateString()}</span>
+              <button type="button" onClick={() => setTimeCursor(null)} className="linkish">
+                plein champ
+              </button>
+              <span>{new Date(sortedEntries[sortedEntries.length - 1].timestamp).toLocaleDateString()}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
       <form className="input-bar" onSubmit={handleSubmit}>
         <label className="sr-only" htmlFor="sourceText">
           Dépose ce qui te traverse
@@ -380,6 +495,89 @@ function App() {
           </button>
         </div>
       </form>
+
+      {showMemory && (
+        <div className="memory-layer" role="dialog" aria-label="Mémoire vivante">
+          <div className="memory-panel">
+            <div className="memory-head">
+              <div>
+                <p className="panel-title">Mémoire vivante</p>
+                <p className="panel-sub">Chaque ligne est une trace, le graphe se recalculera toujours.</p>
+              </div>
+              <div className="memory-actions">
+                <button type="button" className="ghost" onClick={handleUndo} disabled={!previousEntries}>
+                  ↩ Annuler
+                </button>
+                <button type="button" className="ghost" onClick={() => setShowMemory(false)}>
+                  Fermer
+                </button>
+              </div>
+            </div>
+
+            <div className="memory-list" aria-live="polite">
+              {sortedEntries.map((entry) => {
+                const isEditing = editingId === entry.id
+                return (
+                  <div key={entry.id} className="memory-card">
+                    <div className="memory-meta">
+                      <span className="pill">{new Date(entry.timestamp).toLocaleString()}</span>
+                      {entry.emoji && <span className="pill soft">{entry.emoji}</span>}
+                    </div>
+                    {isEditing ? (
+                      <div className="edit-block">
+                        <label className="sr-only" htmlFor={`text-${entry.id}`}>
+                          Texte à modifier
+                        </label>
+                        <textarea
+                          id={`text-${entry.id}`}
+                          value={editText}
+                          onChange={(event) => setEditText(event.target.value)}
+                          rows={3}
+                        />
+                        <label className="mini" htmlFor={`ts-${entry.id}`}>
+                          Horodatage (ISO)
+                        </label>
+                        <input
+                          id={`ts-${entry.id}`}
+                          type="datetime-local"
+                          value={editTimestamp ? editTimestamp.slice(0, 16) : ''}
+                          onChange={(event) => {
+                            const nextValue = event.target.value
+                            if (!nextValue) return
+                            const parsed = new Date(nextValue)
+                            if (Number.isNaN(parsed.getTime())) return
+                            setEditTimestamp(parsed.toISOString())
+                          }}
+                        />
+                        <div className="edit-actions">
+                          <button type="button" className="primary" onClick={handleEditSave}>
+                            ✔ Enregistrer
+                          </button>
+                          <button type="button" className="ghost" onClick={() => setEditingId(null)}>
+                            ↩ Annuler
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="memory-text">{entry.text}</p>
+                    )}
+                    {!isEditing && (
+                      <div className="memory-actions">
+                        <button type="button" className="ghost" onClick={() => handleEditStart(entry)}>
+                          ✏️ Modifier
+                        </button>
+                        <button type="button" className="ghost danger" onClick={() => handleDelete(entry.id)}>
+                          🗑 Supprimer
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -208,6 +208,169 @@ textarea:focus {
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
 
+.ghost {
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.7);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ghost.danger {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.control-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 2px;
+}
+
+.timeline {
+  flex: 1;
+  display: grid;
+  gap: 6px;
+  color: #cbd5e1;
+}
+
+.timeline input[type='range'] {
+  width: 100%;
+  accent-color: #fbbf24;
+}
+
+.timeline-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #94a3b8;
+  gap: 8px;
+}
+
+.linkish {
+  background: none;
+  border: none;
+  color: #93c5fd;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.memory-layer {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 7, 18, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 12px;
+  z-index: 20;
+}
+
+.memory-panel {
+  width: min(960px, 100%);
+  max-height: 90vh;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 18px 18px 14px 14px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.memory-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.panel-title {
+  margin: 0;
+  font-weight: 800;
+  color: #e2e8f0;
+}
+
+.panel-sub {
+  margin: 2px 0 0 0;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.memory-list {
+  overflow-y: auto;
+  display: grid;
+  gap: 10px;
+  padding-right: 4px;
+}
+
+.memory-card {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  gap: 8px;
+}
+
+.memory-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.pill {
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: rgba(59, 130, 246, 0.14);
+  color: #cbd5e1;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.pill.soft {
+  background: rgba(244, 244, 255, 0.14);
+}
+
+.memory-text {
+  margin: 0;
+  color: #e2e8f0;
+}
+
+.memory-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.edit-block {
+  display: grid;
+  gap: 6px;
+}
+
+.edit-block textarea {
+  min-height: 72px;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.mini {
+  margin: 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
 .sr-only {
   border: 0;
   clip: rect(0, 0, 0, 0);

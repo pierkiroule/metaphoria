@@ -112,6 +112,9 @@ const fallback = {
 }
 
 function tokenize(text) {
+  // Avoid Unicode property escapes (\p{L}) that can break parsing on older WebViews/Safari
+  // by explicitly covering common latin ranges. This keeps the app from failing to load with
+  // a blank screen on devices that don't support the more modern regex features.
   return text
     .split(/[^a-zA-Z0-9À-ÿ]+/)
     .map((token) => token.trim().toLowerCase())

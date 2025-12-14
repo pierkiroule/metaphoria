@@ -32,7 +32,17 @@ export function EchoGraph({ nodes, links, onSelectNode, onGenerateEcho }) {
   )
 
   useEffect(() => {
-    if (!wrapperRef.current) return
+    if (!wrapperRef.current) return undefined
+
+    // Some environments (SSR / older browsers) don’t expose ResizeObserver. In that
+    // case, we fall back to a one-off size read so the graph can still render
+    // instead of throwing a ReferenceError at startup.
+    if (typeof ResizeObserver === 'undefined') {
+      const rect = wrapperRef.current.getBoundingClientRect()
+      setSize({ width: rect.width, height: rect.height })
+      return undefined
+    }
+
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width, height } = entry.contentRect
@@ -46,6 +56,8 @@ export function EchoGraph({ nodes, links, onSelectNode, onGenerateEcho }) {
 
   useEffect(() => {
     if (!svgRef.current) return undefined
+
+    if (typeof window === 'undefined') return undefined
 
     const svg = d3.select(svgRef.current)
     svg.selectAll('*').remove()

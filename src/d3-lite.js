@@ -2,6 +2,7 @@
 // This subset supports the small selection, drag, zoom, and force behaviors used in EchoGraph.
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
+const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn) => setTimeout(fn, 16)
 
 class Selection {
   constructor(nodes) {
@@ -129,10 +130,10 @@ function forceSimulation(nodes) {
     if (!running) return
     applyForces()
     tickHandlers.forEach((handler) => handler())
-    requestAnimationFrame(step)
+    raf(step)
   }
 
-  requestAnimationFrame(step)
+  raf(step)
 
   const api = {
     nodes: items,
@@ -150,7 +151,7 @@ function forceSimulation(nodes) {
     restart() {
       if (!running) {
         running = true
-        requestAnimationFrame(step)
+        raf(step)
       }
       return api
     },

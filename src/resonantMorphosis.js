@@ -113,7 +113,7 @@ const fallback = {
 
 function tokenize(text) {
   return text
-    .split(/[^\p{L}\p{N}]+/u)
+    .split(/[^a-zA-Z0-9À-ÿ]+/)
     .map((token) => token.trim().toLowerCase())
     .filter((token) => token && !stopWords.has(token))
 }

@@ -1,22 +1,15 @@
 import { Component, useEffect, useMemo, useRef, useState } from 'react'
 import { adaptGraphToFlow } from '../lib/graphAdapter'
-import { ensureFlowStyles, loadFlowClient } from '../lib/flowLoader'
 
-const fitViewOptions = { padding: 0.24, duration: 420 }
-
-function FlowCanvas({
-  flowLib,
+function GraphCanvas({
   nodes = [],
   links = [],
   onFocusNode,
   onSelectionChange,
   selectedIds = [],
 }) {
-  const { Background, Controls, ReactFlow, useEdgesState, useNodesState, useReactFlow } = flowLib
-
   const wrapperRef = useRef(null)
   const resizeFallbackAppliedRef = useRef(false)
-  const { fitView } = useReactFlow()
 
   const [size, setSize] = useState({ width: 360, height: 360 })
 
@@ -32,11 +25,10 @@ function FlowCanvas({
     [links, nodes, size.height, size.width],
   )
 
-  const [rfNodes, setRfNodes, onNodesChange] = useNodesState(flowGraph.nodes)
-  const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState(flowGraph.edges)
-
-  useEffect(() => setRfNodes(flowGraph.nodes), [flowGraph.nodes, setRfNodes])
-  useEffect(() => setRfEdges(flowGraph.edges), [flowGraph.edges, setRfEdges])
+  const positions = useMemo(
+    () => new Map(flowGraph.nodes.map((node) => [node.id, node.position || { x: 0, y: 0 }])),
+    [flowGraph.nodes],
+  )
 
   useEffect(() => {
     if (!wrapperRef.current) return undefined
@@ -60,10 +52,12 @@ function FlowCanvas({
   }, [])
 
   useEffect(() => {
-    if (fitView && rfNodes.length) {
-      fitView(fitViewOptions)
+    if (!sanitizedSelection.length) return
+    const focusedNode = nodeLookup.get(sanitizedSelection[0])
+    if (focusedNode) {
+      onFocusNode?.(focusedNode)
     }
-  }, [fitView, rfNodes.length])
+  }, [nodeLookup, onFocusNode, sanitizedSelection])
 
   const toggleSelection = (nodeId) => {
     if (!nodeLookup.has(nodeId)) return
@@ -79,60 +73,83 @@ function FlowCanvas({
 
   const handleNodeClick = (event, node) => {
     event?.preventDefault?.()
+    event?.stopPropagation?.()
     const original = nodeLookup.get(node.id) || node.data?.original
     onFocusNode?.(original || node.data)
   }
 
   const handleNodeDoubleClick = (event, node) => {
     event?.preventDefault?.()
+    event?.stopPropagation?.()
     toggleSelection(node.id)
-  }
-
-  const handlePaneDoubleClick = () => {
-    if (fitView) fitView(fitViewOptions)
   }
 
   const handlePaneClick = () => {
     onFocusNode?.(null)
   }
 
-  const emptyState = !rfNodes.length && !rfEdges.length
+  const emptyState = !flowGraph.nodes.length && !flowGraph.edges.length
+  const viewBox = `0 0 ${Math.max(size.width, 1)} ${Math.max(size.height, 1)}`
 
   return (
-    <div className="graph-wrapper" ref={wrapperRef}>
-      <ReactFlow
-        nodes={rfNodes.map((node) => ({
-          ...node,
-          selected: sanitizedSelection.includes(node.id),
-        }))}
-        edges={rfEdges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        fitView
-        fitViewOptions={fitViewOptions}
-        panOnScroll
-        panOnDrag
-        zoomOnPinch
-        zoomOnDoubleClick={false}
-        selectionOnDrag={false}
-        proOptions={{ hideAttribution: true }}
-        minZoom={0.45}
-        maxZoom={2.8}
-        onNodeClick={handleNodeClick}
-        onNodeDoubleClick={handleNodeDoubleClick}
-        onPaneDoubleClick={handlePaneDoubleClick}
-        onPaneClick={handlePaneClick}
-        defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-      >
-        <Background color="rgba(255,255,255,0.12)" gap={20} />
-        <Controls position="bottom-right" showInteractive={false} />
-      </ReactFlow>
+    <div className="graph-wrapper" ref={wrapperRef} onClick={handlePaneClick}>
+      <svg className="graph-canvas" viewBox={viewBox} role="presentation">
+        <g className="graph-edges" strokeLinecap="round" strokeLinejoin="round">
+          {flowGraph.edges.map((edge) => {
+            const source = positions.get(edge.source)
+            const target = positions.get(edge.target)
+            if (!source || !target) return null
+
+            const weight = edge.data?.weight || 1
+            return (
+              <line
+                key={edge.id}
+                x1={source.x}
+                y1={source.y}
+                x2={target.x}
+                y2={target.y}
+                strokeWidth={1 + weight * 0.4}
+                stroke="rgba(15, 23, 42, 0.55)"
+                opacity={0.78}
+              />
+            )
+          })}
+        </g>
+
+        <g className="graph-nodes">
+          {flowGraph.nodes.map((node) => {
+            const selected = sanitizedSelection.includes(node.id)
+            const { x, y } = node.position || { x: 0, y: 0 }
+            const label = node.data?.label || ''
+            const emoji = node.data?.emoji || '⟡'
+            const kind = node.data?.kind || 'node'
+
+            return (
+              <g
+                key={node.id}
+                className={`graph-node kind-${kind}${selected ? ' selected' : ''}`}
+                transform={`translate(${x}, ${y})`}
+                onClick={(event) => handleNodeClick(event, node)}
+                onDoubleClick={(event) => handleNodeDoubleClick(event, node)}
+              >
+                <circle r={18 + (node.data?.weight || 0) * 2} />
+                <text className="graph-emoji" y={-2}>
+                  {emoji}
+                </text>
+                <text className="graph-label" y={12}>
+                  {label}
+                </text>
+              </g>
+            )
+          })}
+        </g>
+      </svg>
 
       <div className="graph-overlay">
         <div className="graph-state">
           {emptyState
             ? 'Dépose des mots pour tracer une constellation.'
-            : 'Tap = focus · Double tap = sélectionner · Pinch = zoom · Double tap vide = recentrer'}
+            : 'Tap = focus · Double tap = sélectionner · Tap vide = désélectionner'}
         </div>
         {resizeFallbackAppliedRef.current && (
           <div className="graph-state minor">ResizeObserver absent · taille figée</div>
@@ -179,40 +196,9 @@ class GraphBoundary extends Component {
 }
 
 export function EchoGraphFlow(props) {
-  const [flowLib, setFlowLib] = useState(null)
-  const [flowStatus, setFlowStatus] = useState('loading')
-
-  useEffect(() => {
-    ensureFlowStyles()
-    let mounted = true
-
-    loadFlowClient()
-      .then((module) => {
-        if (!mounted) return
-        setFlowLib(module)
-        setFlowStatus('ready')
-      })
-      .catch((error) => {
-        console.error('React Flow load failed', error)
-        if (mounted) setFlowStatus('error')
-      })
-
-    return () => {
-      mounted = false
-    }
-  }, [])
-
-  if (!flowLib) {
-    return <GraphFallback status={flowStatus} />
-  }
-
-  const { ReactFlowProvider } = flowLib
-
   return (
     <GraphBoundary>
-      <ReactFlowProvider>
-        <FlowCanvas {...props} flowLib={flowLib} />
-      </ReactFlowProvider>
+      <GraphCanvas {...props} />
     </GraphBoundary>
   )
 }

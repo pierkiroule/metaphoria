@@ -8,6 +8,19 @@ const stopWords = new Set([
   'vous','ils','elles','y','a','d','l',"l'","d'",
 ])
 
+// Tokens that often pollute the flow or carry little meaning in this context.
+const weakParticles = new Set([
+  'me','m','moi','te','t','toi','se','s','suis','es','est','sommes','etes','êtes','sont',
+  'sera','serai','serait','serons','seraient','être','etais','étais','étaient','n','j','qu',
+])
+
+const nodeStyles = {
+  word: { color: '#94a3b8', orbit: 28, size: 10 },
+  tag: { color: '#7c3aed', orbit: 40, size: 14 },
+  metaphor: { color: '#f59e0b', orbit: 18, size: 18 },
+  echo: { color: '#0ea5e9', orbit: 46, size: 12 },
+}
+
 // --- CHAMPS MÉTAPHORIQUES ---
 const metaphoricFields = [
   {
@@ -71,7 +84,11 @@ const fallback = {
   sourceText: '',
   dominantMetaphoricField: 'Écho discret',
   emoji: '…',
-  resonantTags: ['silence','pause','écoute'],
+  resonantTags: [
+    { id: 'silence', label: 'silence', level: 'tag', strength: 0.4 },
+    { id: 'pause', label: 'pause', level: 'tag', strength: 0.35 },
+    { id: 'ecoute', label: 'écoute', level: 'tag', strength: 0.35 },
+  ],
   metaphoricEchoes: ['L’écho reste discret. Rien n’insiste pour l’instant.'],
   graphNodes: [],
   graphLinks: [],
@@ -79,20 +96,56 @@ const fallback = {
 
 // --- OUTILS ---
 function tokenize(text) {
-  // Avoid Unicode property escapes (\p{L}) that can break parsing on older WebViews/Safari
-  // by explicitly covering common latin ranges. This keeps the app from failing to load with
-  // a blank screen on devices that don't support the more modern regex features.
   return text
     .split(/[^a-zA-Z0-9À-ÿ]+/)
     .map(t => t.toLowerCase().trim())
-    .filter(t => t && !stopWords.has(t))
+    .filter(Boolean)
 }
 
-function scoreFields(tokens) {
+function isVerb(token) {
+  if (token.length <= 3) return false
+  return ['er','ir','re','oir'].some(suffix => token.endsWith(suffix))
+    || ['fait','fais','pous','tir','cherch','avance','crée','porte'].some(prefix => token.startsWith(prefix))
+}
+
+function analyzeTokens(text) {
+  // Avoid Unicode property escapes (\p{L}) that can break parsing on older WebViews/Safari
+  // by explicitly covering common latin ranges. This keeps the app from failing to load with
+  // a blank screen on devices that don't support the more modern regex features.
+  const rawTokens = tokenize(text)
+
+  const filtered = rawTokens.filter(token => {
+    if (!token) return false
+    if (stopWords.has(token)) return false
+    if (weakParticles.has(token)) return false
+    if (token.length <= 2) return false
+    return true
+  })
+
+  const carriers = []
+  const verbs = []
+  filtered.forEach(token => {
+    if (isVerb(token)) {
+      verbs.push(token)
+    } else {
+      carriers.push(token)
+    }
+  })
+
+  return { rawTokens, filtered, carriers, verbs }
+}
+
+function scoreFields({ filtered, verbs }) {
   return metaphoricFields.map(field => {
-    const k = tokens.reduce((s,t)=> s + (field.keywords.some(k=>t.includes(k)) ? 2 : 0), 0)
-    const v = tokens.reduce((s,t)=> s + (field.verbs.some(v=>t.includes(v)) ? 1 : 0), 0)
-    return { field, score: k + v }
+    const carrierScore = filtered.reduce(
+      (score, token) => score + (field.keywords.some(k => token.includes(k)) ? 2 : 0),
+      0
+    )
+    const verbScore = verbs.reduce(
+      (score, token) => score + (field.verbs.some(v => token.includes(v)) ? 1.5 : 0),
+      0
+    )
+    return { field, score: carrierScore + verbScore }
   })
 }
 
@@ -100,32 +153,42 @@ function hashSeed(tokens) {
   return tokens.join('-').split('').reduce((a,c)=> (a*31 + c.charCodeAt(0))%9973, 11)
 }
 
-function pick(list, seed, n) {
+function pickUnique(list, seed, n, key = 'label') {
   const out = []
   let i = seed
   while (out.length < n && list.length) {
-    const c = list[Math.abs(i) % list.length]
-    if (!out.includes(c)) out.push(c)
+    const candidate = list[Math.abs(i) % list.length]
+    const value = typeof candidate === 'string' ? candidate : candidate[key]
+    if (!out.some(entry => (typeof entry === 'string' ? entry : entry[key]) === value)) {
+      out.push(candidate)
+    }
     i += 7
   }
   return out
 }
 
-function buildTags(field, tokens, seed) {
-  const freq = tokens.reduce((m,t)=>(m.set(t,(m.get(t)||0)+1),m), new Map())
-  const dom = [...freq.entries()].sort((a,b)=>b[1]-a[1]).map(([t])=>t)
-  const merged = [...dom, ...field.tags]
-  const uniq = merged.filter((t,i)=> merged.indexOf(t)===i)
-  return pick(uniq, seed, Math.min(4, uniq.length))
+function buildTags(field, tokenAnalysis, seed) {
+  const freq = tokenAnalysis.carriers.reduce((m,t)=>(m.set(t,(m.get(t)||0)+1),m), new Map())
+  const dominantWords = [...freq.entries()].sort((a,b)=>b[1]-a[1]).map(([t,c])=>({ label: t, strength: Math.min(1.2, 0.6 + c*0.2) }))
+  const merged = [...dominantWords, ...field.tags.map(label => ({ label, strength: 0.9 }))]
+  const uniq = merged.filter((entry, index) => merged.findIndex(other => other.label === entry.label) === index)
+  const picked = pickUnique(uniq, seed, Math.min(4, uniq.length), 'label')
+
+  return picked.map((entry, index) => ({
+    id: `tag-${entry.label}-${index}`,
+    label: entry.label,
+    level: 'tag',
+    strength: Number.parseFloat(entry.strength.toFixed(2)),
+  }))
 }
 
 function craftEchoes(field, tokens, seed) {
   const textures = ['comme','presque','doucement','lentement','en sourdine']
   const feelings = ['tient','retient','attend','cherche','se glisse']
   const anchors = field.images.length ? field.images : ['un geste discret']
-  const words = pick(tokens, seed+7, 3)
+  const words = pickUnique(tokens.filtered, seed+7, 3)
 
-  return pick(anchors, seed+3, 3).map((img,i)=>{
+  return pickUnique(anchors, seed+3, 3).map((img,i)=>{
     const t = textures[Math.abs(seed+i*11)%textures.length]
     const f = feelings[Math.abs(seed+i*13)%feelings.length]
     const w = words[i] || field.tags[i] || field.label.toLowerCase()
@@ -133,37 +196,54 @@ function craftEchoes(field, tokens, seed) {
   })
 }
 
+function decorateNode(base) {
+  const style = nodeStyles[base.level]
+  const safeStrength = Math.max(0.4, base.strength || 1)
+  return {
+    color: style?.color,
+    orbit: Math.round(style?.orbit + safeStrength * 6),
+    size: Math.round(style?.size + safeStrength * 4),
+    ...base,
+  }
+}
+
 function buildGraph(tokens, field, secondary, tags, echoes) {
   const nodes = []
   const links = []
 
-  const freq = tokens.reduce((m,t)=>(m.set(t,(m.get(t)||0)+1),m), new Map())
+  const freq = tokens.filtered.reduce((m,t)=>(m.set(t,(m.get(t)||0)+1),m), new Map())
   ;[...freq.entries()].forEach(([t,c],i)=>{
-    nodes.push({ id:`word-${t}-${i}`, type:'word', label:t, weight:1+c*0.2, emoji:'•' })
+    nodes.push(decorateNode({ id:`word-${t}-${i}`, type:'word', level:'word', label:t, strength:Math.min(1.4,0.8+c*0.25), emoji:'•' }))
   })
 
-  tags.forEach((t,i)=> nodes.push({ id:`tag-${t}-${i}`, type:'tag', label:t, weight:1.1, emoji:'✧' }))
+  tags.forEach((tag)=> nodes.push(decorateNode({ ...tag, type:'tag', emoji:'✧' })))
 
-  const metas = [field, ...secondary.slice(0,2)].map((f,i)=>({
-    id:`metaphor-${f.id}-${i}`, type:'metaphor', label:f.label, weight:1.6-i*0.15, emoji:f.emoji
+  const metas = [field, ...secondary.slice(0,2)].map((f,i)=>decorateNode({
+    id:`metaphor-${f.id}-${i}`,
+    type:'metaphor',
+    level:'metaphor',
+    label:f.label,
+    strength:1.6-i*0.2,
+    emoji:f.emoji
   }))
   nodes.push(...metas)
 
-  echoes.forEach((e,i)=> nodes.push({ id:`echo-${i}`, type:'echo', label:e, weight:1.2, emoji:'🫧' }))
+  echoes.forEach((e,i)=> nodes.push(decorateNode({ id:`echo-${i}`, type:'echo', level:'echo', label:e, strength:1.2, emoji:'🫧' })))
 
-  const tagNodes = nodes.filter(n=>n.type==='tag')
-  const echoNodes = nodes.filter(n=>n.type==='echo')
+  const tagNodes = nodes.filter(n=>n.level==='tag')
+  const echoNodes = nodes.filter(n=>n.level==='echo')
+  const wordNodes = nodes.filter(n=>n.level==='word')
 
-  nodes.filter(n=>n.type==='word').forEach((w,i)=>{
+  wordNodes.forEach((w,i)=>{
     const t = tagNodes[i % Math.max(tagNodes.length,1)]
-    if (t) links.push({ source:w.id, target:t.id, weight:1 })
+    if (t) links.push({ id:`link-word-${i}`, source:w.id, target:t.id, strength:0.8+w.strength*0.1, distance: t.orbit - 8 })
   })
 
-  tagNodes.forEach(t=>{
-    metas.forEach((m,i)=> links.push({ source:t.id, target:m.id, weight:1.4-i*0.2 }))
+  tagNodes.forEach((t, tagIndex)=>{
+    metas.forEach((m,i)=> links.push({ id:`link-tag-${tagIndex}-${i}`, source:t.id, target:m.id, strength:1.2-i*0.1, distance: m.orbit }))
   })
 
-  echoNodes.forEach(e=> links.push({ source: metas[0].id, target:e.id, weight:1.6 }))
+  echoNodes.forEach((e,i)=> links.push({ id:`link-echo-${i}`, source: metas[0].id, target:e.id, strength:1.3, distance: e.orbit }))
 
   return { nodes, links }
 }
@@ -171,8 +251,8 @@ function buildGraph(tokens, field, secondary, tags, echoes) {
 // --- FONCTION UNIQUE EXPORTÉE ---
 export function generateResonantMorphosis(text) {
   const trimmed = (text || '').trim()
-  const tokens = tokenize(trimmed)
-  if (!tokens.length) return { ...fallback, sourceText: trimmed }
+  const tokens = analyzeTokens(trimmed)
+  if (!tokens.filtered.length) return { ...fallback, sourceText: trimmed }
 
   const scored = scoreFields(tokens).sort((a,b)=>b.score-a.score)
   const dominant = scored[0]
@@ -182,7 +262,7 @@ export function generateResonantMorphosis(text) {
     .filter(s=> s.field.id !== dominant.field.id && s.score > 0)
     .map(s=> s.field)
 
-  const seed = hashSeed(tokens)
+  const seed = hashSeed(tokens.filtered)
   const resonantTags = buildTags(dominant.field, tokens, seed+5)
   const metaphoricEchoes = craftEchoes(dominant.field, tokens, seed+9)
   const { nodes: graphNodes, links: graphLinks } =

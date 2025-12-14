@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import './App.css'
 import { generateResonantMorphosis } from './resonantMorphosis'
+import GraphView from './components/GraphView'
 
 const DEFAULT_TEXT = "Je suis fatigué, tout me semble lourd et je n’avance plus."
 
@@ -8,7 +9,11 @@ const fallbackMorphosis = {
   sourceText: '',
   dominantMetaphoricField: 'Écho discret',
   emoji: '…',
-  resonantTags: ['pause', 'silence', 'attente'],
+  resonantTags: [
+    { id: 'pause', label: 'pause', level: 'tag', strength: 0.4 },
+    { id: 'silence', label: 'silence', level: 'tag', strength: 0.35 },
+    { id: 'attente', label: 'attente', level: 'tag', strength: 0.35 },
+  ],
   metaphoricEchoes: ["Une note suspendue, rien ne se presse encore."],
   graphNodes: [],
   graphLinks: [],
@@ -73,11 +78,15 @@ function App() {
           <div className="pill-row">
             <span className="pill">{morphosis.emoji}</span>
             <span className="pill">{morphosis.dominantMetaphoricField}</span>
-            {morphosis.resonantTags.map((tag) => (
-              <span key={tag} className="pill secondary">
-                #{tag}
-              </span>
-            ))}
+            {morphosis.resonantTags.map((tag) => {
+              const label = typeof tag === 'string' ? tag : tag.label
+              const key = typeof tag === 'string' ? tag : tag.id || tag.label
+              return (
+                <span key={key} className="pill secondary">
+                  #{label}
+                </span>
+              )
+            })}
             {!morphosis.resonantTags.length && <span className="pill secondary">Aucun tag disponible</span>}
           </div>
           <div className="echoes">
@@ -96,6 +105,8 @@ function App() {
             <p className="muted">Liste compacte des nœuds et liens générés.</p>
           </div>
 
+          <GraphView nodes={morphosis.graphNodes} links={morphosis.graphLinks} mode="list" />
+
           <div className="list-grid">
             <div>
               <p className="label muted">Nœuds ({morphosis.graphNodes.length})</p>
@@ -104,7 +115,8 @@ function App() {
                   <li key={node.id} className="list-row">
                     <div>
                       <p className="value">{node.label}</p>
-                      <p className="muted">Type : {node.type}</p>
+                      <p className="muted">Niveau : {node.level || node.type}</p>
+                      <p className="muted subtle">Force : {node.strength?.toFixed ? node.strength.toFixed(2) : node.strength || '1'}</p>
                     </div>
                     <span className="badge">{node.emoji || '•'}</span>
                   </li>

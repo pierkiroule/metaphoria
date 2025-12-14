@@ -47,17 +47,38 @@ const EMOJI_PALETTE = ['🌙', '🚀', '🌳', '🌊', '🔥', '🪶', '✨', '�
 const SAMPLE_ENTRIES = [
   {
     id: 'entry-1',
-    timestamp: Date.now() - 1000 * 60 * 60 * 5,
+    timestamp: Date.now() - 1000 * 60 * 60 * 7,
     text: 'Je cherche du calme et un nouvel élan pour respirer.',
     emoji: '🌙',
     tags: ['calme', 'respiration', 'élan'],
   },
   {
     id: 'entry-2',
-    timestamp: Date.now() - 1000 * 60 * 60 * 2,
+    timestamp: Date.now() - 1000 * 60 * 60 * 5,
     text: 'Je sens mes racines et une braise qui chauffe doucement.',
     emoji: '🌳',
     tags: ['racines', 'braise', 'douceur'],
+  },
+  {
+    id: 'entry-3',
+    timestamp: Date.now() - 1000 * 60 * 60 * 3,
+    text: 'Une flamme crépite, j ai envie de danser et de partir loin.',
+    emoji: '🔥',
+    tags: ['flamme', 'envie', 'danser', 'voyage'],
+  },
+  {
+    id: 'entry-4',
+    timestamp: Date.now() - 1000 * 60 * 60 * 2,
+    text: 'Le vent salé transporte une chanson d eau et de lumière.',
+    emoji: '🌊',
+    tags: ['vent', 'mer', 'lumière', 'énergie'],
+  },
+  {
+    id: 'entry-5',
+    timestamp: Date.now() - 1000 * 60 * 20,
+    text: 'Je respire, je m ancre, j écris pour me souvenir.',
+    emoji: '🪶',
+    tags: ['respiration', 'ancrage', 'écrire', 'mémoire'],
   },
 ]
 
@@ -140,6 +161,8 @@ function suggestEmojis(tags) {
 function buildGraph(entries) {
   const nodeMap = new Map()
   const linkSet = new Map()
+  const tagCount = new Map()
+  const emojiCount = new Map()
 
   const ensureNode = (id, data) => {
     if (!nodeMap.has(id)) nodeMap.set(id, { ...data })
@@ -147,7 +170,14 @@ function buildGraph(entries) {
 
   const ensureLink = (source, target, weight = 0.6) => {
     const key = `${source}-${target}`
-    if (!linkSet.has(key)) linkSet.set(key, { source, target, weight })
+    if (linkSet.has(key)) {
+      const existing = linkSet.get(key)
+      existing.weight = (existing.weight || 1) + weight
+      existing.distance = Math.max(80, 220 - (existing.weight || 1) * 18)
+      linkSet.set(key, existing)
+    } else {
+      linkSet.set(key, { source, target, weight, distance: Math.max(100, 200 - weight * 12) })
+    }
   }
 
   ensureNode('cosmobulle', { id: 'cosmobulle', label: 'Cosmobulle', emoji: '🪨', level: 'metaphor' })
@@ -157,15 +187,22 @@ function buildGraph(entries) {
 
   entries.forEach((entry) => {
     const verbatimId = `verbatim-${entry.id}`
-    ensureNode(verbatimId, { id: verbatimId, label: entry.text.slice(0, 40) || 'Verbatim', level: 'verbatim' })
+    const tokenCount = tokenize(entry.text).length
+    ensureNode(verbatimId, {
+      id: verbatimId,
+      label: entry.text.slice(0, 40) || 'Verbatim',
+      level: 'verbatim',
+      strength: Math.max(1, Math.min(6, Math.round(tokenCount / 3))),
+    })
 
     const tags = entry.tags || extractTags(entry.text)
 
     tags.forEach((tag) => {
       const tagId = `tag-${tag}`
       ensureNode(tagId, { id: tagId, label: tag, level: 'tag' })
+      tagCount.set(tagId, (tagCount.get(tagId) || 0) + 1)
       if (entry.emoji) {
-        ensureLink(tagId, `emoji-${entry.emoji}`, 0.5)
+        ensureLink(tagId, `emoji-${entry.emoji}`, 0.9)
       } else {
         ensureLink(tagId, 'cosmobulle', 0.4)
       }
@@ -174,9 +211,10 @@ function buildGraph(entries) {
     if (entry.emoji) {
       const emojiId = `emoji-${entry.emoji}`
       ensureNode(emojiId, { id: emojiId, label: entry.emoji, emoji: entry.emoji, level: 'emoji' })
+      emojiCount.set(emojiId, (emojiCount.get(emojiId) || 0) + 1)
       ensureLink('cosmobulle', emojiId, 0.8)
-      ensureLink(emojiId, verbatimId, 0.7)
-      tags.forEach((tag) => ensureLink(emojiId, `tag-${tag}`, 0.7))
+      ensureLink(emojiId, verbatimId, 1)
+      tags.forEach((tag) => ensureLink(emojiId, `tag-${tag}`, 0.8))
 
       emojiToTags.set(emojiId, new Set([...(emojiToTags.get(emojiId) || []), ...tags]))
       emojiToEntries.set(emojiId, [...(emojiToEntries.get(emojiId) || []), entry])
@@ -193,12 +231,22 @@ function buildGraph(entries) {
       const b = emojiIds[j]
       const shared = new Set([...emojiToTags.get(a)].filter((tag) => emojiToTags.get(b).has(tag)))
       if (shared.size) {
-        ensureLink(a, b, 0.6 + shared.size * 0.1)
+        ensureLink(a, b, 0.8 + shared.size * 0.35)
       }
     }
   }
 
-  return { nodes: Array.from(nodeMap.values()), links: Array.from(linkSet.values()), emojiToEntries }
+  const enrichedNodes = Array.from(nodeMap.values()).map((node) => {
+    if (node.level === 'tag') {
+      return { ...node, strength: Math.min(8, tagCount.get(node.id) || 1) }
+    }
+    if (node.level === 'emoji') {
+      return { ...node, strength: Math.min(10, 2 + (emojiCount.get(node.id) || 1) * 2) }
+    }
+    return node
+  })
+
+  return { nodes: enrichedNodes, links: Array.from(linkSet.values()), emojiToEntries }
 }
 
 function App() {

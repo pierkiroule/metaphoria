@@ -57,6 +57,8 @@ export function EchoGraph({ nodes, links, onSelectNode, onGenerateEcho }) {
   useEffect(() => {
     if (!svgRef.current) return undefined
 
+    if (typeof window === 'undefined') return undefined
+
     const svg = d3.select(svgRef.current)
     svg.selectAll('*').remove()
 

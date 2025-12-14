@@ -3,38 +3,50 @@ import './App.css'
 import { generateResonantMorphosis } from './resonantMorphosis'
 
 const DEFAULT_TEXT = "Je suis fatigué, tout me semble lourd et je n’avance plus."
+const fallbackMorphosis = {
+  sourceText: '',
+  dominantMetaphoricField: 'Écho discret',
+  emoji: '…',
+  resonantTags: ['pause', 'silence', 'attente'],
+  metaphoricEchoes: ["Une note suspendue, rien ne se presse encore."],
+  graphNodes: [],
+}
 
 function App() {
   const [sourceDraft, setSourceDraft] = useState(DEFAULT_TEXT)
   const [sourceText, setSourceText] = useState(DEFAULT_TEXT)
 
-  const morphosis = useMemo(() => generateResonantMorphosis(sourceText), [sourceText])
+  const morphosis = useMemo(() => {
+    try {
+      return generateResonantMorphosis(sourceText)
+    } catch (error) {
+      console.error('Morphosis error', error)
+      return fallbackMorphosis
+    }
+  }, [sourceText])
+
+  const notableNodes = useMemo(() => morphosis.graphNodes.slice(0, 8), [morphosis.graphNodes])
 
   const handleSubmit = (event) => {
     event.preventDefault()
-    if (!sourceDraft.trim()) return
-    setSourceText(sourceDraft.trim())
+    const next = sourceDraft.trim()
+    if (!next) return
+    setSourceText(next)
   }
-
-  const notableNodes = useMemo(() => {
-    return morphosis.graphNodes.slice(0, 12)
-  }, [morphosis.graphNodes])
 
   return (
     <div className="app">
-      <header className="header">
-        <div>
-          <p className="eyebrow">Metaphoria</p>
-          <h1 className="title">Échos discrets</h1>
-          <p className="subtitle">
-            Dépose quelques mots pour générer un petit ensemble de tags et d’images. Aucun graph, juste le
-            nécessaire.
-          </p>
-        </div>
+      <header className="hero">
+        <p className="brand">Metaphoria</p>
+        <h1 className="headline">Petite page d’accueil</h1>
+        <p className="lede">
+          Dépose quelques mots et récupère des échos basiques. Pas d’animations, pas de graphes : juste un
+          écran lisible qui démarre sans surprise.
+        </p>
       </header>
 
-      <main className="main">
-        <section className="card">
+      <main className="layout">
+        <section className="panel">
           <form className="form" onSubmit={handleSubmit}>
             <label className="label" htmlFor="sourceText">
               Tes mots
@@ -48,41 +60,31 @@ function App() {
               aria-label="Zone de texte pour déposer les mots"
             />
             <button type="submit" className="button">
-              Générer
+              Générer les échos
             </button>
           </form>
         </section>
 
-        <section className="card">
-          <div className="section-header">
-            <h2>Résultat</h2>
-            <p className="muted">Basé sur le texte courant. Pas de mise en scène, juste les données.</p>
+        <section className="panel">
+          <div className="section-head">
+            <h2>Échos générés</h2>
+            <p className="muted">Lecture directe au chargement, même en mode hors ligne.</p>
           </div>
-          <div className="grid">
-            <div>
-              <p className="muted">Champ dominant</p>
-              <p className="value">
-                {morphosis.emoji} {morphosis.dominantMetaphoricField}
-              </p>
-            </div>
-            <div>
-              <p className="muted">Tags résonants</p>
-              <div className="pill-row">
-                {morphosis.resonantTags.length ? (
-                  morphosis.resonantTags.map((tag) => (
-                    <span key={tag} className="pill">
-                      #{tag}
-                    </span>
-                  ))
-                ) : (
-                  <span className="pill muted">Aucun tag</span>
-                )}
-              </div>
-            </div>
+          <div className="pill-row">
+            <span className="pill">{morphosis.emoji}</span>
+            <span className="pill">{morphosis.dominantMetaphoricField}</span>
+            {morphosis.resonantTags.map((tag) => (
+              <span key={tag} className="pill secondary">
+                #{tag}
+              </span>
+            ))}
+            {!morphosis.resonantTags.length && (
+              <span className="pill secondary">Aucun tag disponible</span>
+            )}
           </div>
           <div className="echoes">
             {morphosis.metaphoricEchoes.map((line, index) => (
-              <p key={line} className="echo-line">
+              <p key={line} className="echo">
                 {index + 1}. {line}
               </p>
             ))}
@@ -90,23 +92,23 @@ function App() {
           </div>
         </section>
 
-        <section className="card">
-          <div className="section-header">
-            <h2>Fragments</h2>
-            <p className="muted">Premiers nœuds identifiés. Lecture simple, sans interactions.</p>
+        <section className="panel">
+          <div className="section-head">
+            <h2>Fragments notables</h2>
+            <p className="muted">Petit aperçu des premiers nœuds détectés.</p>
           </div>
-          <div className="node-list" role="list">
+          <ul className="list">
             {notableNodes.map((node) => (
-              <div key={node.id} className="node-row" role="listitem">
+              <li key={node.id} className="list-row">
                 <div>
                   <p className="value">{node.label}</p>
                   <p className="muted">Type : {node.type}</p>
                 </div>
                 <span className="badge">{node.emoji || '•'}</span>
-              </div>
+              </li>
             ))}
             {!notableNodes.length && <p className="muted">Aucun fragment détecté.</p>}
-          </div>
+          </ul>
         </section>
       </main>
     </div>

@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import './App.css'
 import { generateResonantMorphosis } from './resonantMorphosis'
 import CosmoGraph from './components/CosmoGraph'
-import OverlayEcho from './components/OverlayEcho'
 
 const DEFAULT_TEXT = "Je suis fatigué, tout me semble lourd et je n’avance plus."
 
@@ -23,8 +22,8 @@ const fallbackMorphosis = {
 function App() {
   const [sourceDraft, setSourceDraft] = useState(DEFAULT_TEXT)
   const [sourceText, setSourceText] = useState(DEFAULT_TEXT)
-  const [debug, setDebug] = useState(false)
-  const [echoOverlay, setEchoOverlay] = useState('')
+  const [murmur, setMurmur] = useState('')
+  const [entered, setEntered] = useState(false)
 
   const morphosis = useMemo(() => {
     try {
@@ -40,42 +39,40 @@ function App() {
     const next = sourceDraft.trim()
     if (!next) return
     setSourceText(next)
-    setEchoOverlay('')
+  }
+
+  if (!entered) {
+    return (
+      <div className="app-shell intro-screen">
+        <div className="intro-block">
+          <p className="intro-title">🫧 ÉchoBulles · Metaphoria</p>
+          <p className="intro-line">Dépose ce qui te traverse.</p>
+          <p className="intro-line">Mots. Corps. Images. Émojis.</p>
+          <button type="button" className="primary intro-button" onClick={() => setEntered(true)}>
+            Entrer dans la cosmobulle
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="app-shell">
-      <section className="intro-card" aria-label="Présentation ÉchoBulles">
-        <p className="eyebrow">🫧 ÉchoBulles · MétaphorIA</p>
-        <p className="lead">Un espace où les mots résonnent.</p>
-        <p>
-          Tu déposes des mots, des phrases, des sensations. Ils deviennent des métabulles. Les
-          métabulles flottent, se relient, vibrent. Elles dessinent une cosmobulle de résonance.
-        </p>
-        <p>
-          Pas d’analyse. Pas de jugement. Juste des échos métaphoriques. MétaphorIA transforme
-          doucement tes mots en images, tags et phrases poétiques pour t’aider à sentir ce qui
-          insiste.
-        </p>
-        <p>
-          Tout se passe localement, en sécurité. Rien n’est envoyé sans ton accord. ÉchoBulles
-          n’apporte pas de réponse. Elle ouvre un paysage intérieur.
-        </p>
-        <p className="lead">🫧 Entre dans la cosmobulle.</p>
-      </section>
-
       <div className="sky">
         <div className="halo" aria-hidden />
         <div className="graph-stage">
           <CosmoGraph
             nodes={morphosis.graphNodes}
             links={morphosis.graphLinks}
-            onEchoLongPress={setEchoOverlay}
-            onEmptyTap={() => setEchoOverlay('')}
-            onReset={() => setEchoOverlay('')}
-            debug={debug}
+            onMurmur={setMurmur}
+            onEmptyTap={() => setMurmur('')}
+            onReset={() => setMurmur('')}
           />
-          <OverlayEcho text={echoOverlay} onClose={() => setEchoOverlay('')} />
+          {murmur && (
+            <div className="murmur" role="status" aria-live="polite">
+              {murmur}
+            </div>
+          )}
         </div>
       </div>
 
@@ -93,54 +90,11 @@ function App() {
           placeholder="Dépose ce qui te traverse : mots, sensations, emojis…"
         />
         <div className="bar-actions">
-          <button type="button" className="ghost" onClick={() => setDebug((value) => !value)}>
-            {debug ? 'Masquer debug' : 'Debug'}
-          </button>
           <button type="submit" className="primary">
             Diffuser
           </button>
         </div>
       </form>
-
-      {debug && (
-        <div className="debug-panel">
-          <div>
-            <p className="label muted">Nœuds ({morphosis.graphNodes.length})</p>
-            <ul className="list">
-              {morphosis.graphNodes.map((node) => (
-                <li key={node.id} className="list-row">
-                  <div>
-                    <p className="value">{node.label}</p>
-                    <p className="muted">Niveau : {node.level || node.type}</p>
-                  </div>
-                  <span className="badge">{node.emoji || '•'}</span>
-                </li>
-              ))}
-              {!morphosis.graphNodes.length && <p className="muted">Aucun fragment détecté.</p>}
-            </ul>
-          </div>
-
-          <div>
-            <p className="label muted">Liens ({morphosis.graphLinks.length})</p>
-            <ul className="list">
-              {morphosis.graphLinks.map((link) => {
-                const source = morphosis.graphNodes.find((node) => node.id === link.source)
-                const target = morphosis.graphNodes.find((node) => node.id === link.target)
-                return (
-                  <li key={link.id || `${link.source}-${link.target}`} className="list-row">
-                    <span className="muted">{source?.label || link.source}</span>
-                    <span className="badge" aria-hidden>
-                      →
-                    </span>
-                    <span className="muted">{target?.label || link.target}</span>
-                  </li>
-                )
-              })}
-              {!morphosis.graphLinks.length && <p className="muted">Aucun lien disponible.</p>}
-            </ul>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

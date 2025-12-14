@@ -241,7 +241,7 @@ export function drawNodes(layer, nodes, handlers = {}) {
     nodeElements.forEach(({ circle, node }) => {
       if (node.level === 'tag') {
         const isVisible = focusedId && tagSet.has(node.id)
-        circle.setAttribute('opacity', isVisible ? '0.9' : focusedId ? '0.02' : '0.06')
+        circle.setAttribute('opacity', isVisible ? '0.9' : focusedId ? '0.02' : '0.02')
         circle.setAttribute('stroke-width', isVisible ? '3' : circle.dataset.baseStrokeWidth)
         circle.setAttribute(
           'stroke',
@@ -315,10 +315,9 @@ export function drawNodes(layer, nodes, handlers = {}) {
 export default function CosmoGraph({
   nodes = [],
   links = [],
-  onEchoLongPress,
+  onMurmur,
   onEmptyTap,
   onReset,
-  debug = false,
 }) {
   const containerRef = useRef(null)
   const rafRef = useRef(null)
@@ -331,6 +330,7 @@ export default function CosmoGraph({
   const graphAPIRef = useRef({})
   const focusRef = useRef(null)
   const focusTagsRef = useRef([])
+  const scaleControlRef = useRef(() => {})
   const [selection, setSelection] = useState([])
   const [resonance, setResonance] = useState(null)
   const [stableEchoes, setStableEchoes] = useState([])
@@ -354,6 +354,14 @@ export default function CosmoGraph({
     })
     return Array.from(set)
   }, [focusedEmoji, links, nodeMap])
+
+  const craftMurmur = (node) => {
+    const label = node.label || node.id
+    if (node.level === 'metaphor') return `🪨 ${label} · Un centre respire doucement.`
+    if (node.level === 'tag') return `✧ ${label} · Une nuance se dévoile.`
+    if (node.level === 'echo') return `🫧 ${label}`
+    return `• ${label}`
+  }
 
   useEffect(() => {
     const el = containerRef.current
@@ -411,12 +419,16 @@ export default function CosmoGraph({
         linkAPI.reset()
         nodeAPI.focusNode(node.id)
         linkAPI.highlightNode(node.id)
+        onMurmur?.(craftMurmur(node))
         if (node.level !== 'tag') setFocusedEmoji(node.id)
       },
       onLongPress: (node) => {
+        if (node.level === 'metaphor' || node.level === 'tag') {
+          setFocusedEmoji(node.id)
+          scaleControlRef.current?.(1.18)
+        }
         nodeAPI.focusNode(node.id)
         linkAPI.highlightNode(node.id)
-        if (node.level === 'echo') onEchoLongPress?.(node.label)
       },
       onDoubleTap: (node) => {
         setSelection((previous) => {
@@ -477,6 +489,7 @@ export default function CosmoGraph({
       setSelection([])
       setResonance(null)
       setFocusedEmoji(null)
+      scaleControlRef.current?.(1)
       onReset?.()
     }
 
@@ -546,13 +559,14 @@ export default function CosmoGraph({
     }
 
     const updateScale = (scale) => {
-      const clamped = Math.min(Math.max(scale, 0.65), 2.2)
+      const clamped = Math.min(Math.max(scale, 0.75), 1.8)
       scaleRef.current = clamped
       scene.setAttribute(
         'transform',
         `translate(${(1 - clamped) * (width / 2)}, ${(1 - clamped) * (height / 2)}) scale(${clamped})`
       )
     }
+    scaleControlRef.current = updateScale
 
     const handlePointerDown = (event) => {
       pointerPositions.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
@@ -608,7 +622,7 @@ export default function CosmoGraph({
       svg.replaceChildren()
       window.clearTimeout(highlightTimeout)
     }
-  }, [combinedNodes, links, onEchoLongPress, onEmptyTap, onReset])
+    }, [combinedNodes, links, onEmptyTap, onReset])
 
   useEffect(() => {
     const validIds = new Set(combinedNodes.map((node) => node.id))
@@ -698,11 +712,6 @@ export default function CosmoGraph({
         >
           ← Retour
         </button>
-      )}
-      {debug && (
-        <p style={{ margin: '8px 12px', color: '#94a3b8', fontSize: '13px' }}>
-          Debug : {combinedNodes.length} nœuds, {links.length} liens
-        </p>
       )}
     </div>
   )

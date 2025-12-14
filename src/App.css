@@ -16,6 +16,7 @@ body {
     radial-gradient(circle at 80% 10%, rgba(236, 72, 153, 0.06), transparent 30%),
     #030712;
   min-height: 100vh;
+  overflow: hidden;
 }
 
 .app-shell {
@@ -24,40 +25,50 @@ body {
   flex-direction: column;
   padding: 12px;
   gap: 12px;
+  background: linear-gradient(180deg, rgba(3, 7, 18, 0.9) 0%, rgba(3, 7, 18, 0.96) 100%);
 }
 
-.intro-card {
-  background: linear-gradient(145deg, rgba(79, 70, 229, 0.08), rgba(14, 165, 233, 0.08)),
+.intro-screen {
+  align-items: center;
+  justify-content: center;
+}
+
+.intro-block {
+  background: radial-gradient(circle at 30% 30%, rgba(99, 102, 241, 0.1), rgba(14, 165, 233, 0.06)),
     rgba(15, 23, 42, 0.9);
   border: 1px solid rgba(148, 163, 184, 0.25);
-  border-radius: 18px;
-  padding: 16px;
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
+  border-radius: 20px;
+  padding: 24px;
+  text-align: center;
   display: grid;
-  gap: 8px;
-  color: #e2e8f0;
+  gap: 10px;
+  box-shadow: 0 14px 50px rgba(0, 0, 0, 0.5);
 }
 
-.intro-card p {
+.intro-title {
   margin: 0;
-}
-
-.intro-card .eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 12px;
+  font-size: 18px;
+  letter-spacing: 0.04em;
   color: #a5b4fc;
   font-weight: 700;
 }
 
-.intro-card .lead {
+.intro-line {
+  margin: 0;
+  color: #e2e8f0;
   font-weight: 600;
+}
+
+.intro-button {
+  width: fit-content;
+  justify-self: center;
+  margin-top: 8px;
 }
 
 .sky {
   position: relative;
   flex: 1;
-  min-height: 70vh;
+  min-height: 80vh;
   border-radius: 18px;
   background: radial-gradient(circle at 50% 30%, rgba(59, 130, 246, 0.08), rgba(14, 116, 144, 0.06)),
     linear-gradient(180deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 0.82) 100%);
@@ -81,6 +92,21 @@ body {
   padding: 12px;
 }
 
+.murmur {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 14px;
+  background: rgba(15, 23, 42, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 14px;
+  font-size: 15px;
+  max-width: 92%;
+  text-align: center;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+
 .input-bar {
   display: flex;
   flex-direction: column;
@@ -99,7 +125,7 @@ textarea {
   padding: 12px;
   font-size: 16px;
   resize: vertical;
-  min-height: 96px;
+  min-height: 88px;
   background: rgba(15, 23, 42, 0.65);
   color: #e2e8f0;
 }
@@ -111,84 +137,19 @@ textarea:focus {
 
 .bar-actions {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
-  flex-wrap: wrap;
-}
-
-.primary,
-.ghost {
-  padding: 10px 14px;
-  border-radius: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid transparent;
-  color: #e2e8f0;
 }
 
 .primary {
-  background: linear-gradient(120deg, #6366f1, #22d3ee);
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-.ghost {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(148, 163, 184, 0.2);
-}
-
-.debug-panel {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px;
-  background: rgba(15, 23, 42, 0.9);
-  border: 1px dashed rgba(148, 163, 184, 0.35);
-  border-radius: 16px;
-  padding: 12px;
-}
-
-.list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.list-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  padding: 10px 14px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.02);
-  gap: 10px;
-  color: #e2e8f0;
-}
-
-.value {
-  margin: 0 0 2px;
-  font-weight: 600;
-}
-
-.label,
-.muted {
-  margin: 0;
-  color: #94a3b8;
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 32px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: #0ea5e9;
-  color: #0b1221;
   font-weight: 700;
-  font-size: 14px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #0b1221;
+  background: linear-gradient(120deg, #fbbf24, #22d3ee);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
 
 .sr-only {
@@ -209,7 +170,7 @@ textarea:focus {
   padding: 8px 12px;
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.4);
-  background: rgba(15, 23, 42, 0.8);
+  background: rgba(15, 23, 42, 0.82);
   color: #e2e8f0;
   font-weight: 600;
   cursor: pointer;

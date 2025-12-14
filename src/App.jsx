@@ -1,155 +1,379 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
-import { generateResonantMorphosis } from './resonantMorphosis'
-import GraphView from './components/GraphView'
 import CosmoGraph from './components/CosmoGraph'
 
-const DEFAULT_TEXT = "Je suis fatigué, tout me semble lourd et je n’avance plus."
+const STORAGE_KEY = 'echobulles_entries_v1'
 
-const fallbackMorphosis = {
-  sourceText: '',
-  dominantMetaphoricField: 'Écho discret',
-  emoji: '…',
-  resonantTags: [
-    { id: 'pause', label: 'pause', level: 'tag', strength: 0.4 },
-    { id: 'silence', label: 'silence', level: 'tag', strength: 0.35 },
-    { id: 'attente', label: 'attente', level: 'tag', strength: 0.35 },
-  ],
-  metaphoricEchoes: ["Une note suspendue, rien ne se presse encore."],
-  graphNodes: [],
-  graphLinks: [],
+const STOPWORDS = new Set([
+  'le',
+  'la',
+  'les',
+  'de',
+  'du',
+  'des',
+  'un',
+  'une',
+  'et',
+  'ou',
+  'en',
+  'dans',
+  'pour',
+  'par',
+  'avec',
+  'ce',
+  'cet',
+  'cette',
+  'que',
+  'qui',
+  'quoi',
+  'quand',
+  'où',
+  'comment',
+  'sur',
+  'sous',
+  'mon',
+  'ma',
+  'mes',
+  'ton',
+  'ta',
+  'tes',
+  'son',
+  'sa',
+  'ses',
+])
+
+const EMOJI_PALETTE = ['🌙', '🚀', '🌳', '🌊', '🔥', '🪶', '✨', '🪨', '🌞', '🌧️']
+
+const SAMPLE_ENTRIES = [
+  {
+    id: 'entry-1',
+    timestamp: Date.now() - 1000 * 60 * 60 * 5,
+    text: 'Je cherche du calme et un nouvel élan pour respirer.',
+    emoji: '🌙',
+    tags: ['calme', 'respiration', 'élan'],
+  },
+  {
+    id: 'entry-2',
+    timestamp: Date.now() - 1000 * 60 * 60 * 2,
+    text: 'Je sens mes racines et une braise qui chauffe doucement.',
+    emoji: '🌳',
+    tags: ['racines', 'braise', 'douceur'],
+  },
+]
+
+function loadEntries() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return SAMPLE_ENTRIES
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return SAMPLE_ENTRIES
+    return parsed
+  } catch (error) {
+    console.error('Impossible de charger les entrées locales', error)
+    return SAMPLE_ENTRIES
+  }
+}
+
+function persistEntries(entries) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries))
+  } catch (error) {
+    console.error('Impossible de sauvegarder les entrées locales', error)
+  }
+}
+
+function tokenize(text) {
+  return text
+    .toLowerCase()
+    .split(/[^a-zà-ÿœæ0-9]+/i)
+    .filter((token) => token && token.length > 2 && !STOPWORDS.has(token))
+}
+
+function extractTags(text) {
+  const tokens = tokenize(text)
+  const counts = tokens.reduce((acc, token) => {
+    acc[token] = (acc[token] || 0) + 1
+    return acc
+  }, {})
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([token]) => token)
+}
+
+function suggestEmojis(tags) {
+  const hints = tags.join(' ')
+  const matches = []
+  const hintList = [
+    { key: 'calm', emoji: '🌙' },
+    { key: 'nuit', emoji: '🌙' },
+    { key: 'repos', emoji: '🌙' },
+    { key: 'élan', emoji: '🚀' },
+    { key: 'envie', emoji: '🚀' },
+    { key: 'audace', emoji: '🚀' },
+    { key: 'racine', emoji: '🌳' },
+    { key: 'terre', emoji: '🌳' },
+    { key: 'ancr', emoji: '🌳' },
+    { key: 'eau', emoji: '🌊' },
+    { key: 'vague', emoji: '🌊' },
+    { key: 'flux', emoji: '🌊' },
+    { key: 'feu', emoji: '🔥' },
+    { key: 'ard', emoji: '🔥' },
+    { key: 'passion', emoji: '🔥' },
+    { key: 'air', emoji: '🪶' },
+    { key: 'léger', emoji: '🪶' },
+    { key: 'écrire', emoji: '🪶' },
+    { key: 'étoile', emoji: '✨' },
+    { key: 'cosmos', emoji: '✨' },
+  ]
+
+  hintList.forEach((hint) => {
+    if (hints.includes(hint.key) && !matches.includes(hint.emoji)) {
+      matches.push(hint.emoji)
+    }
+  })
+
+  const final = matches.length ? matches : EMOJI_PALETTE
+  return final.slice(0, 5)
+}
+
+function buildGraph(entries) {
+  const nodeMap = new Map()
+  const linkSet = new Map()
+
+  const ensureNode = (id, data) => {
+    if (!nodeMap.has(id)) nodeMap.set(id, { ...data })
+  }
+
+  const ensureLink = (source, target, weight = 0.6) => {
+    const key = `${source}-${target}`
+    if (!linkSet.has(key)) linkSet.set(key, { source, target, weight })
+  }
+
+  ensureNode('cosmobulle', { id: 'cosmobulle', label: 'Cosmobulle', emoji: '🪨', level: 'metaphor' })
+
+  const emojiToTags = new Map()
+  const emojiToEntries = new Map()
+
+  entries.forEach((entry) => {
+    const verbatimId = `verbatim-${entry.id}`
+    ensureNode(verbatimId, { id: verbatimId, label: entry.text.slice(0, 40) || 'Verbatim', level: 'verbatim' })
+
+    const tags = entry.tags || extractTags(entry.text)
+
+    tags.forEach((tag) => {
+      const tagId = `tag-${tag}`
+      ensureNode(tagId, { id: tagId, label: tag, level: 'tag' })
+      if (entry.emoji) {
+        ensureLink(tagId, `emoji-${entry.emoji}`, 0.5)
+      } else {
+        ensureLink(tagId, 'cosmobulle', 0.4)
+      }
+    })
+
+    if (entry.emoji) {
+      const emojiId = `emoji-${entry.emoji}`
+      ensureNode(emojiId, { id: emojiId, label: entry.emoji, emoji: entry.emoji, level: 'emoji' })
+      ensureLink('cosmobulle', emojiId, 0.8)
+      ensureLink(emojiId, verbatimId, 0.7)
+      tags.forEach((tag) => ensureLink(emojiId, `tag-${tag}`, 0.7))
+
+      emojiToTags.set(emojiId, new Set([...(emojiToTags.get(emojiId) || []), ...tags]))
+      emojiToEntries.set(emojiId, [...(emojiToEntries.get(emojiId) || []), entry])
+    } else {
+      ensureLink('cosmobulle', verbatimId, 0.5)
+      tags.forEach((tag) => ensureLink(verbatimId, `tag-${tag}`, 0.4))
+    }
+  })
+
+  const emojiIds = Array.from(emojiToTags.keys())
+  for (let i = 0; i < emojiIds.length; i += 1) {
+    for (let j = i + 1; j < emojiIds.length; j += 1) {
+      const a = emojiIds[i]
+      const b = emojiIds[j]
+      const shared = new Set([...emojiToTags.get(a)].filter((tag) => emojiToTags.get(b).has(tag)))
+      if (shared.size) {
+        ensureLink(a, b, 0.6 + shared.size * 0.1)
+      }
+    }
+  }
+
+  return { nodes: Array.from(nodeMap.values()), links: Array.from(linkSet.values()), emojiToEntries }
 }
 
 function App() {
-  const [sourceDraft, setSourceDraft] = useState(DEFAULT_TEXT)
-  const [sourceText, setSourceText] = useState(DEFAULT_TEXT)
+  const [entered, setEntered] = useState(false)
+  const [entries, setEntries] = useState(() => loadEntries())
+  const [sourceDraft, setSourceDraft] = useState('')
+  const [selectedNode, setSelectedNode] = useState(null)
 
-  const morphosis = useMemo(() => {
-    try {
-      return generateResonantMorphosis(sourceText)
-    } catch (error) {
-      console.error('Morphosis error', error)
-      return fallbackMorphosis
-    }
-  }, [sourceText])
+  useEffect(() => {
+    persistEntries(entries)
+  }, [entries])
+
+  const graphData = useMemo(() => buildGraph(entries), [entries])
 
   const handleSubmit = (event) => {
     event.preventDefault()
-    const next = sourceDraft.trim()
-    if (!next) return
-    setSourceText(next)
+    const text = sourceDraft.trim()
+    if (!text) return
+    const tags = extractTags(text)
+    const id = `entry-${Date.now()}`
+    const entry = { id, timestamp: Date.now(), text, emoji: null, tags }
+    setEntries((prev) => [...prev, entry])
+    setSourceDraft('')
+    setSelectedNode({ type: 'verbatim', entry })
+  }
+
+  const handleNodeTap = (node) => {
+    if (node.id.startsWith('verbatim-')) {
+      const entryId = node.id.replace('verbatim-', '')
+      const entry = entries.find((item) => item.id === entryId)
+      if (entry) setSelectedNode({ type: 'verbatim', entry })
+      return
+    }
+
+    if (node.id.startsWith('emoji-')) {
+      const emojiId = node.id
+      const relatedEntries = graphData.emojiToEntries.get(emojiId) || []
+      setSelectedNode({ type: 'emoji', emoji: node.emoji, entries: relatedEntries })
+      return
+    }
+
+    setSelectedNode(null)
+  }
+
+  const handleAssignEmoji = (entryId, emoji) => {
+    setEntries((prev) =>
+      prev.map((item) => (item.id === entryId ? { ...item, emoji } : item))
+    )
+  }
+
+  const selectedTags = useMemo(() => {
+    if (selectedNode?.type === 'verbatim') return selectedNode.entry.tags || extractTags(selectedNode.entry.text)
+    if (selectedNode?.type === 'emoji') {
+      const tagSets = (selectedNode.entries || []).map((entry) => entry.tags || extractTags(entry.text))
+      return Array.from(new Set(tagSets.flat()))
+    }
+    return []
+  }, [selectedNode])
+
+  const emojiChoices = useMemo(() => suggestEmojis(selectedTags), [selectedTags])
+
+  if (!entered) {
+    return (
+      <div className="app-shell intro-screen">
+        <div className="intro-block">
+          <p className="intro-title">Bienvenue dans ÉchoBulles</p>
+          <p className="intro-line">Ici, les mots deviennent des bulles.</p>
+          <p className="intro-line">Elles flottent, se touchent, résonnent.</p>
+          <p className="intro-line">Tu peux les écouter.</p>
+          <button type="button" className="primary intro-button" onClick={() => setEntered(true)}>
+            Commencer
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="app">
-      <header className="hero">
-        <p className="brand">Metaphoria</p>
-        <h1 className="headline">Echo offline minimal</h1>
-        <p className="lede">
-          Une version simplifiée pour vérifier que tout s’affiche sans écran blanc. Aucun chargement distant ni moteur de
-          graphe.
-        </p>
-      </header>
+    <div className="app-shell">
+      <div className="sky">
+        <div className="halo" aria-hidden />
+        <div className="graph-stage">
+          <CosmoGraph
+            nodes={graphData.nodes}
+            links={graphData.links}
+            onNodeTap={handleNodeTap}
+            onEmptyTap={() => setSelectedNode(null)}
+            onReset={() => setSelectedNode(null)}
+          />
+        </div>
+      </div>
 
-      <main className="layout">
-        <section className="panel">
-          <form className="form" onSubmit={handleSubmit}>
-            <label className="label" htmlFor="sourceText">
-              Tes mots
-            </label>
-            <textarea
-              id="sourceText"
-              name="sourceText"
-              value={sourceDraft}
-              rows={4}
-              onChange={(event) => setSourceDraft(event.target.value)}
-              aria-label="Zone de texte pour déposer les mots"
-            />
-            <button type="submit" className="button">
-              Générer les échos
-            </button>
-          </form>
-        </section>
+      <div className="detail-panel">
+        <div className="panel-head">
+          <p className="panel-title">Mémoire vivante</p>
+          <p className="panel-sub">Aucune donnée ne quitte cet appareil.</p>
+        </div>
 
-        <section className="panel">
-          <div className="section-head">
-            <h2>Échos générés</h2>
-            <p className="muted">Lecture locale, sans dépendance réseau.</p>
-          </div>
-          <div className="pill-row">
-            <span className="pill">{morphosis.emoji}</span>
-            <span className="pill">{morphosis.dominantMetaphoricField}</span>
-            {morphosis.resonantTags.map((tag) => {
-              const label = typeof tag === 'string' ? tag : tag.label
-              const key = typeof tag === 'string' ? tag : tag.id || tag.label
-              return (
-                <span key={key} className="pill secondary">
-                  #{label}
+        {selectedNode?.type === 'verbatim' && (
+          <div className="card">
+            <p className="micro-label">Verbatim</p>
+            <p className="verbatim-text">{selectedNode.entry.text}</p>
+            <div className="tag-row">
+              {(selectedNode.entry.tags || []).map((tag) => (
+                <span key={tag} className="tag-chip">
+                  ✧ {tag}
                 </span>
-              )
-            })}
-            {!morphosis.resonantTags.length && <span className="pill secondary">Aucun tag disponible</span>}
-          </div>
-          <div className="echoes">
-            {morphosis.metaphoricEchoes.map((line, index) => (
-              <p key={line} className="echo">
-                {index + 1}. {line}
-              </p>
-            ))}
-            {!morphosis.metaphoricEchoes.length && <p className="muted">Aucun écho pour l’instant.</p>}
-          </div>
-        </section>
-
-        <section className="panel">
-          <div className="section-head">
-            <h2>Fragments détectés</h2>
-            <p className="muted">Liste compacte des nœuds et liens générés.</p>
-          </div>
-
-          <GraphView nodes={morphosis.graphNodes} links={morphosis.graphLinks} mode="list" />
-
-          <CosmoGraph nodes={morphosis.graphNodes} links={morphosis.graphLinks} />
-
-          <div className="list-grid">
-            <div>
-              <p className="label muted">Nœuds ({morphosis.graphNodes.length})</p>
-              <ul className="list">
-                {morphosis.graphNodes.map((node) => (
-                  <li key={node.id} className="list-row">
-                    <div>
-                      <p className="value">{node.label}</p>
-                      <p className="muted">Niveau : {node.level || node.type}</p>
-                      <p className="muted subtle">Force : {node.strength?.toFixed ? node.strength.toFixed(2) : node.strength || '1'}</p>
-                    </div>
-                    <span className="badge">{node.emoji || '•'}</span>
-                  </li>
+              ))}
+            </div>
+            <div className="emoji-row">
+              <p className="micro-label">Associer un symbole</p>
+              <div className="chips">
+                {emojiChoices.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className={`chip ${selectedNode.entry.emoji === emoji ? 'chip-active' : ''}`}
+                    onClick={() => handleAssignEmoji(selectedNode.entry.id, emoji)}
+                  >
+                    {emoji}
+                  </button>
                 ))}
-                {!morphosis.graphNodes.length && <p className="muted">Aucun fragment détecté.</p>}
-              </ul>
-            </div>
-
-            <div>
-              <p className="label muted">Liens ({morphosis.graphLinks.length})</p>
-              <ul className="list">
-                {morphosis.graphLinks.map((link) => {
-                  const source = morphosis.graphNodes.find((node) => node.id === link.source)
-                  const target = morphosis.graphNodes.find((node) => node.id === link.target)
-                  return (
-                    <li key={link.id || `${link.source}-${link.target}`} className="list-row">
-                      <span className="muted">{source?.label || link.source}</span>
-                      <span className="badge" aria-hidden>
-                        →
-                      </span>
-                      <span className="muted">{target?.label || link.target}</span>
-                    </li>
-                  )
-                })}
-                {!morphosis.graphLinks.length && <p className="muted">Aucun lien disponible.</p>}
-              </ul>
+              </div>
             </div>
           </div>
-        </section>
-      </main>
+        )}
+
+        {selectedNode?.type === 'emoji' && (
+          <div className="card">
+            <p className="micro-label">Champ sémantique</p>
+            <p className="emoji-focus">{selectedNode.emoji}</p>
+            <div className="tag-row">
+              {selectedTags.map((tag) => (
+                <span key={tag} className="tag-chip">
+                  ✧ {tag}
+                </span>
+              ))}
+            </div>
+            <div className="verbatim-list">
+              {(selectedNode.entries || []).map((entry) => (
+                <p key={entry.id} className="verbatim-text">
+                  {entry.text}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!selectedNode && (
+          <div className="card">
+            <p className="micro-label">Geste</p>
+            <p className="verbatim-text">Dépose un mot, puis touche une bulle pour écouter ce qui résonne.</p>
+          </div>
+        )}
+      </div>
+
+      <form className="input-bar" onSubmit={handleSubmit}>
+        <label className="sr-only" htmlFor="sourceText">
+          Dépose ce qui te traverse
+        </label>
+        <textarea
+          id="sourceText"
+          name="sourceText"
+          value={sourceDraft}
+          rows={3}
+          onChange={(event) => setSourceDraft(event.target.value)}
+          aria-label="Zone de texte pour déposer les mots"
+          placeholder="Ajoute tes mots à faire échobuller•°"
+        />
+        <div className="bar-actions">
+          <button type="submit" className="primary">
+            Diffuser
+          </button>
+        </div>
+      </form>
     </div>
   )
 }

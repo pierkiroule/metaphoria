@@ -181,10 +181,10 @@ textarea:focus {
   transform: translateY(1px);
 }
 
-.coach-panel {
+.punch-section {
   display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  grid-template-columns: 1fr;
 }
 
 .coach-block {
@@ -238,4 +238,14 @@ textarea:focus {
   font-size: 13px;
   margin: 0;
   opacity: 0.8;
+}
+
+.basket {
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 14px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
 }

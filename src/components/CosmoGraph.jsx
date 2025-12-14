@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 const ORBITS = {
-  metaphor: 0,
+  metaphor: 110,
+  emoji: 110,
   tag: 80,
   word: 130,
   echo: 190,
 }
 
 const TYPE_STYLE = {
-  metaphor: { radius: 34, color: '#fbbf24' },
+  metaphor: { radius: 30, color: '#fbbf24' },
+  emoji: { radius: 24, color: '#fef3c7' },
   tag: { radius: 16, color: '#60a5fa' },
   word: { radius: 5, color: '#94a3b8' },
   echo: { radius: 14, color: '#bae6fd' },
@@ -52,6 +54,7 @@ export function computeOrbitalPositions(nodes, width, height, time = 0) {
 
   const grouped = {
     metaphor: [],
+    emoji: [],
     tag: [],
     word: [],
     echo: [],
@@ -89,20 +92,13 @@ export function computeOrbitalPositions(nodes, width, height, time = 0) {
   }
 
   if (grouped.metaphor.length) {
-    grouped.metaphor.forEach((node, index) => {
-      const r = float(index, ORBITS.metaphor)
-      positions.push({
-        ...node,
-        level: node.level || node.type,
-        x: cx + r,
-        y: cy,
-      })
-    })
+    placeRing(grouped.metaphor, ORBITS.metaphor || 0)
   } else if (nodes.length) {
     const fallback = nodes[0]
     positions.push({ ...fallback, level: fallback.level || fallback.type, x: cx, y: cy })
   }
 
+  placeRing(grouped.emoji, ORBITS.emoji || ORBITS.metaphor || 120)
   placeRing(grouped.tag, ORBITS.tag)
   placeRing(grouped.word, ORBITS.word)
   placeRing(grouped.echo, ORBITS.echo)
@@ -190,14 +186,14 @@ export function drawNodes(layer, nodes, handlers = {}) {
     circle.dataset.baseStrokeWidth = circle.getAttribute('stroke-width')
     circle.dataset.baseStroke = circle.getAttribute('stroke')
 
-    if (node.level === 'metaphor') {
+    if (node.level === 'metaphor' || node.level === 'emoji') {
       createSvgElement(
         'text',
         {
           'text-anchor': 'middle',
           dy: '0.35em',
-          'font-size': '24px',
-          fill: '#0f172a',
+          'font-size': node.level === 'metaphor' ? '24px' : '18px',
+          fill: node.level === 'metaphor' ? '#0f172a' : '#0b1221',
         },
         group
       ).textContent = node.emoji || '✨'
@@ -362,7 +358,7 @@ export default function CosmoGraph({
 
   const craftMurmur = (node) => {
     const label = node.label || node.id
-    if (node.level === 'metaphor') return `🪨 ${label} · Un centre respire doucement.`
+    if (node.level === 'metaphor' || node.level === 'emoji') return `${node.emoji || '✨'} ${label}`
     if (node.level === 'tag') return `✧ ${label} · Une nuance se dévoile.`
     if (node.level === 'echo') return `🫧 ${label}`
     return `• ${label}`
@@ -425,14 +421,9 @@ export default function CosmoGraph({
         nodeAPI.focusNode(node.id)
         linkAPI.highlightNode(node.id)
         onMurmur?.(craftMurmur(node))
-        if (node.level !== 'tag') setFocusedEmoji(node.id)
         if (node.emoji) onNodeTap?.(node)
       },
       onLongPress: (node) => {
-        if (node.level === 'metaphor' || node.level === 'tag') {
-          setFocusedEmoji(node.id)
-          scaleControlRef.current?.(1.18)
-        }
         nodeAPI.focusNode(node.id)
         linkAPI.highlightNode(node.id)
       },

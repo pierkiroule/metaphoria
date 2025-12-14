@@ -328,6 +328,8 @@ export default function CosmoGraph({
   onReset,
   onNodeTap,
   onSelectionChange,
+  focusedId,
+  onFocusChange,
 }) {
   const containerRef = useRef(null)
   const rafRef = useRef(null)
@@ -350,7 +352,8 @@ export default function CosmoGraph({
   const [selection, setSelection] = useState([])
   const [resonance, setResonance] = useState(null)
   const [stableEchoes, setStableEchoes] = useState([])
-  const [focusedEmoji, setFocusedEmoji] = useState(null)
+  const [focusedEmoji, setFocusedEmoji] = useState(focusedId || null)
+  const [viewportKey, setViewportKey] = useState(0)
 
   const combinedNodes = useMemo(() => [...nodes, ...stableEchoes], [nodes, stableEchoes])
   const nodeMap = useMemo(() => new Map(combinedNodes.map((node) => [node.id, node])), [combinedNodes])
@@ -378,6 +381,16 @@ export default function CosmoGraph({
     if (node.level === 'echo') return `🫧 ${label}`
     return `• ${label}`
   }
+
+  useEffect(() => {
+    setFocusedEmoji(focusedId || null)
+  }, [focusedId])
+
+  useEffect(() => {
+    const handleResize = () => setViewportKey((value) => value + 1)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   useEffect(() => {
     const el = containerRef.current
@@ -436,6 +449,10 @@ export default function CosmoGraph({
         nodeAPI.focusNode(node.id)
         linkAPI.highlightNode(node.id)
         onMurmur?.(craftMurmur(node))
+        if (node.level === 'emoji') {
+          setFocusedEmoji(node.id)
+          onFocusChange?.(node.id)
+        }
         if (node.emoji) onNodeTap?.(node)
       },
       onLongPress: (node) => {
@@ -501,6 +518,7 @@ export default function CosmoGraph({
       setSelection([])
       setResonance(null)
       setFocusedEmoji(null)
+      onFocusChange?.(null)
       panRef.current = { x: 0, y: 0 }
       scaleControlRef.current?.(1)
       onReset?.()
@@ -726,7 +744,7 @@ export default function CosmoGraph({
       svg.replaceChildren()
       window.clearTimeout(highlightTimeout)
     }
-    }, [combinedNodes, links, onEmptyTap, onReset])
+    }, [combinedNodes, links, onEmptyTap, onReset, viewportKey])
 
   useEffect(() => {
     const validIds = new Set(combinedNodes.map((node) => node.id))

@@ -253,7 +253,7 @@ function App() {
   const [entered, setEntered] = useState(false)
   const [entries, setEntries] = useState(() => loadEntries())
   const [sourceDraft, setSourceDraft] = useState('')
-  const [selectedNode, setSelectedNode] = useState(null)
+  const [focusedEmojiId, setFocusedEmojiId] = useState(null)
 
   useEffect(() => {
     persistEntries(entries)
@@ -266,47 +266,55 @@ function App() {
     const text = sourceDraft.trim()
     if (!text) return
     const tags = extractTags(text)
+    const suggested = suggestEmojis(tags)
     const id = `entry-${Date.now()}`
-    const entry = { id, timestamp: Date.now(), text, emoji: null, tags }
+    const entry = { id, timestamp: Date.now(), text, emoji: suggested[0] || null, tags }
     setEntries((prev) => [...prev, entry])
     setSourceDraft('')
-    setSelectedNode({ type: 'verbatim', entry })
   }
 
   const handleNodeTap = (node) => {
-    if (node.id.startsWith('verbatim-')) {
-      const entryId = node.id.replace('verbatim-', '')
-      const entry = entries.find((item) => item.id === entryId)
-      if (entry) setSelectedNode({ type: 'verbatim', entry })
-      return
-    }
-
     if (node.id.startsWith('emoji-')) {
-      const emojiId = node.id
-      const relatedEntries = graphData.emojiToEntries.get(emojiId) || []
-      setSelectedNode({ type: 'emoji', emoji: node.emoji, entries: relatedEntries })
-      return
+      setFocusedEmojiId(node.id)
     }
-
-    setSelectedNode(null)
   }
 
-  const handleAssignEmoji = (entryId, emoji) => {
-    setEntries((prev) =>
-      prev.map((item) => (item.id === entryId ? { ...item, emoji } : item))
+  const nodeMap = useMemo(
+    () => new Map(graphData.nodes.map((node) => [node.id, node])),
+    [graphData.nodes]
+  )
+
+  const graphView = useMemo(() => {
+    const baseNodes = graphData.nodes.filter(
+      (node) => node.level === 'metaphor' || node.level === 'emoji'
     )
-  }
+    const baseIds = new Set(baseNodes.map((node) => node.id))
+    const baseLinks = graphData.links.filter(
+      (link) => baseIds.has(link.source) && baseIds.has(link.target)
+    )
 
-  const selectedTags = useMemo(() => {
-    if (selectedNode?.type === 'verbatim') return selectedNode.entry.tags || extractTags(selectedNode.entry.text)
-    if (selectedNode?.type === 'emoji') {
-      const tagSets = (selectedNode.entries || []).map((entry) => entry.tags || extractTags(entry.text))
-      return Array.from(new Set(tagSets.flat()))
-    }
-    return []
-  }, [selectedNode])
+    if (!focusedEmojiId) return { nodes: baseNodes, links: baseLinks }
 
-  const emojiChoices = useMemo(() => suggestEmojis(selectedTags), [selectedTags])
+    const tagIds = new Set()
+    graphData.links.forEach((link) => {
+      if (link.source === focusedEmojiId) {
+        const target = nodeMap.get(link.target)
+        if (target?.level === 'tag') tagIds.add(target.id)
+      }
+      if (link.target === focusedEmojiId) {
+        const source = nodeMap.get(link.source)
+        if (source?.level === 'tag') tagIds.add(source.id)
+      }
+    })
+
+    const tagNodes = graphData.nodes.filter((node) => tagIds.has(node.id))
+    const visibleIds = new Set([...baseIds, ...tagIds])
+    const focusedLinks = graphData.links.filter(
+      (link) => visibleIds.has(link.source) && visibleIds.has(link.target)
+    )
+
+    return { nodes: [...baseNodes, ...tagNodes], links: focusedLinks }
+  }, [focusedEmojiId, graphData.links, graphData.nodes, nodeMap])
 
   if (!entered) {
     return (
@@ -326,81 +334,31 @@ function App() {
 
   return (
     <div className="app-shell">
+      <header className="topline">
+        <div>
+          <p className="brand">ÉchoBulles · Cosmobulle</p>
+          <p className="whisper">Le graphe est la voix principale. Les mots murmurent en arrière-plan.</p>
+        </div>
+        <span className="badge">local · offline</span>
+      </header>
+
       <div className="sky">
         <div className="halo" aria-hidden />
         <div className="graph-stage">
           <CosmoGraph
-            nodes={graphData.nodes}
-            links={graphData.links}
+            nodes={graphView.nodes}
+            links={graphView.links}
+            focusedId={focusedEmojiId}
+            onFocusChange={setFocusedEmojiId}
             onNodeTap={handleNodeTap}
-            onEmptyTap={() => setSelectedNode(null)}
-            onReset={() => setSelectedNode(null)}
+            onEmptyTap={() => setFocusedEmojiId(null)}
+            onReset={() => setFocusedEmojiId(null)}
           />
+          <div className="graph-overlay">
+            <p className="overlay-line">Vue globale : tap pour zoomer sur une métabulle.</p>
+            {focusedEmojiId && <p className="overlay-line">Retour : bouton ← ou tap dans le vide pour la cosmobulle.</p>}
+          </div>
         </div>
-      </div>
-
-      <div className="detail-panel">
-        <div className="panel-head">
-          <p className="panel-title">Mémoire vivante</p>
-          <p className="panel-sub">Aucune donnée ne quitte cet appareil.</p>
-        </div>
-
-        {selectedNode?.type === 'verbatim' && (
-          <div className="card">
-            <p className="micro-label">Verbatim</p>
-            <p className="verbatim-text">{selectedNode.entry.text}</p>
-            <div className="tag-row">
-              {(selectedNode.entry.tags || []).map((tag) => (
-                <span key={tag} className="tag-chip">
-                  ✧ {tag}
-                </span>
-              ))}
-            </div>
-            <div className="emoji-row">
-              <p className="micro-label">Associer un symbole</p>
-              <div className="chips">
-                {emojiChoices.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    className={`chip ${selectedNode.entry.emoji === emoji ? 'chip-active' : ''}`}
-                    onClick={() => handleAssignEmoji(selectedNode.entry.id, emoji)}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {selectedNode?.type === 'emoji' && (
-          <div className="card">
-            <p className="micro-label">Champ sémantique</p>
-            <p className="emoji-focus">{selectedNode.emoji}</p>
-            <div className="tag-row">
-              {selectedTags.map((tag) => (
-                <span key={tag} className="tag-chip">
-                  ✧ {tag}
-                </span>
-              ))}
-            </div>
-            <div className="verbatim-list">
-              {(selectedNode.entries || []).map((entry) => (
-                <p key={entry.id} className="verbatim-text">
-                  {entry.text}
-                </p>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {!selectedNode && (
-          <div className="card">
-            <p className="micro-label">Geste</p>
-            <p className="verbatim-text">Dépose un mot, puis touche une bulle pour écouter ce qui résonne.</p>
-          </div>
-        )}
       </div>
 
       <form className="input-bar" onSubmit={handleSubmit}>

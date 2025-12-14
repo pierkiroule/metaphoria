@@ -16,15 +16,15 @@ body {
     radial-gradient(circle at 80% 10%, rgba(236, 72, 153, 0.06), transparent 30%),
     #030712;
   min-height: 100vh;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 .app-shell {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 12px;
+  gap: 16px;
+  padding: 14px 14px 16px;
   background: linear-gradient(180deg, rgba(3, 7, 18, 0.9) 0%, rgba(3, 7, 18, 0.96) 100%);
 }
 
@@ -67,8 +67,8 @@ body {
 
 .sky {
   position: relative;
-  flex: 1;
-  min-height: 55vh;
+  flex: 1 1 auto;
+  min-height: 62vh;
   border-radius: 18px;
   background: radial-gradient(circle at 50% 30%, rgba(59, 130, 246, 0.08), rgba(14, 116, 144, 0.06)),
     linear-gradient(180deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 0.82) 100%);
@@ -87,9 +87,9 @@ body {
 .graph-stage {
   position: relative;
   width: 100%;
-  height: min(72vh, 780px);
-  min-height: 420px;
-  padding: 10px;
+  height: min(78vh, 820px);
+  min-height: 480px;
+  padding: 12px;
   overflow: hidden;
 }
 
@@ -111,104 +111,54 @@ body {
   transform: translateY(1px);
 }
 
-.detail-panel {
-  display: grid;
-  gap: 10px;
-}
-
-.panel-head {
+.topline {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 2px;
 }
 
-.panel-title {
+.brand {
   margin: 0;
-  font-weight: 700;
-  color: #c7d2fe;
-}
-
-.panel-sub {
-  margin: 0;
-  font-size: 12px;
-  color: #94a3b8;
-}
-
-.card {
-  background: rgba(15, 23, 42, 0.82);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 14px;
-  padding: 12px;
-  display: grid;
-  gap: 8px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
-}
-
-.micro-label {
-  margin: 0;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #e5e7eb;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 11px;
+  font-size: 14px;
+}
+
+.whisper {
+  margin: 2px 0 0 0;
   color: #94a3b8;
-}
-
-.verbatim-text {
-  margin: 0;
-  color: #e2e8f0;
-  line-height: 1.5;
-  font-weight: 600;
-}
-
-.tag-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.tag-chip {
-  background: rgba(99, 102, 241, 0.12);
-  color: #c7d2fe;
-  padding: 6px 10px;
-  border-radius: 10px;
   font-size: 13px;
 }
 
-.emoji-row {
-  display: grid;
-  gap: 6px;
-}
-
-.emoji-focus {
-  margin: 0;
-  font-size: 32px;
-  text-align: center;
-}
-
-.verbatim-list {
-  display: grid;
-  gap: 8px;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chip {
+.badge {
   padding: 8px 12px;
   border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  background: rgba(255, 255, 255, 0.04);
-  color: #e2e8f0;
-  cursor: pointer;
-  font-weight: 600;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.8);
+  font-weight: 700;
 }
 
-.chip-active {
-  background: linear-gradient(120deg, #fbbf24, #22d3ee);
-  color: #0b1221;
-  border-color: transparent;
+.graph-overlay {
+  position: absolute;
+  inset: auto 14px 14px 14px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, rgba(11, 18, 33, 0.75) 0%, rgba(11, 18, 33, 0.6) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+.overlay-line {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 13px;
 }
 
 .input-bar {
@@ -271,18 +221,10 @@ textarea:focus {
 
 @media (min-width: 900px) {
   .app-shell {
-    padding: 16px 18px 20px;
+    padding: 16px 18px 18px;
   }
 
   .sky {
-    min-height: 62vh;
-  }
-
-  .detail-panel {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .panel-head {
-    grid-column: span 3;
+    min-height: 70vh;
   }
 }

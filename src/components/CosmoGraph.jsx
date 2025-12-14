@@ -53,6 +53,7 @@ function createSvgElement(name, attributes = {}, parent) {
 export function computeOrbitalPositions(nodes, width, height, time = 0) {
   const cx = width / 2
   const cy = height / 2
+  const margin = 32
 
   const grouped = {
     metaphor: [],
@@ -84,12 +85,15 @@ export function computeOrbitalPositions(nodes, width, height, time = 0) {
     const total = Math.max(list.length, 1)
     list.forEach((node, index) => {
       const angle = (2 * Math.PI * index) / total - Math.PI / 2
-      const r = float(index, radius)
+      const strength = Math.min(Math.max(node.strength || node.weight || 1, 1), 10)
+      const r = float(index, radius - strength * 2.3)
+      const localCX = cx + r * Math.cos(angle)
+      const localCY = cy + r * Math.sin(angle)
       positions.push({
         ...node,
         level: node.level || node.type,
-        x: cx + r * Math.cos(angle),
-        y: cy + r * Math.sin(angle),
+        x: Math.min(Math.max(localCX, margin), width - margin),
+        y: Math.min(Math.max(localCY, margin), height - margin),
       })
     })
   }
@@ -172,7 +176,8 @@ export function drawNodes(layer, nodes, handlers = {}) {
 
   const nodeElements = nodes.map((node) => {
     const group = createSvgElement('g', {}, nodeGroup)
-    const baseRadius = TYPE_STYLE[node.level]?.radius || 10
+    const magnitude = Math.min(Math.max(node.strength || node.weight || 1, 1), 12)
+    const baseRadius = (TYPE_STYLE[node.level]?.radius || 10) * (1 + (magnitude - 1) * 0.12)
     const circle = createSvgElement(
       'circle',
       {
@@ -323,11 +328,14 @@ export default function CosmoGraph({
   onReset,
   onNodeTap,
   onSelectionChange,
+  focusedId,
+  onFocusChange,
 }) {
   const containerRef = useRef(null)
   const rafRef = useRef(null)
   const activeMetaphorRef = useRef(null)
   const scaleRef = useRef(1)
+  const panRef = useRef({ x: 0, y: 0 })
   const pinchStartRef = useRef(null)
   const pointerPositions = useRef(new Map())
   const resonanceRef = useRef(null)
@@ -336,10 +344,16 @@ export default function CosmoGraph({
   const focusRef = useRef(null)
   const focusTagsRef = useRef([])
   const scaleControlRef = useRef(() => {})
+  const panStartRef = useRef(null)
+  const dragNodeRef = useRef(null)
+  const offsetsRef = useRef(new Map())
+  const lastPositionsRef = useRef(new Map())
+  const svgRef = useRef(null)
   const [selection, setSelection] = useState([])
   const [resonance, setResonance] = useState(null)
   const [stableEchoes, setStableEchoes] = useState([])
-  const [focusedEmoji, setFocusedEmoji] = useState(null)
+  const [focusedEmoji, setFocusedEmoji] = useState(focusedId || null)
+  const [viewportKey, setViewportKey] = useState(0)
 
   const combinedNodes = useMemo(() => [...nodes, ...stableEchoes], [nodes, stableEchoes])
   const nodeMap = useMemo(() => new Map(combinedNodes.map((node) => [node.id, node])), [combinedNodes])
@@ -367,6 +381,16 @@ export default function CosmoGraph({
     if (node.level === 'echo') return `🫧 ${label}`
     return `• ${label}`
   }
+
+  useEffect(() => {
+    setFocusedEmoji(focusedId || null)
+  }, [focusedId])
+
+  useEffect(() => {
+    const handleResize = () => setViewportKey((value) => value + 1)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   useEffect(() => {
     const el = containerRef.current
@@ -425,6 +449,10 @@ export default function CosmoGraph({
         nodeAPI.focusNode(node.id)
         linkAPI.highlightNode(node.id)
         onMurmur?.(craftMurmur(node))
+        if (node.level === 'emoji') {
+          setFocusedEmoji(node.id)
+          onFocusChange?.(node.id)
+        }
         if (node.emoji) onNodeTap?.(node)
       },
       onLongPress: (node) => {
@@ -490,6 +518,8 @@ export default function CosmoGraph({
       setSelection([])
       setResonance(null)
       setFocusedEmoji(null)
+      onFocusChange?.(null)
+      panRef.current = { x: 0, y: 0 }
       scaleControlRef.current?.(1)
       onReset?.()
     }
@@ -497,7 +527,15 @@ export default function CosmoGraph({
     const safeRender = (timestamp) => {
       try {
         const positioned = computeOrbitalPositions(combinedNodes, width, height, timestamp)
-        const posMap = new Map(positioned.map((node) => [node.id, node]))
+        const margin = 32
+        const adjusted = positioned.map((node) => {
+          const offset = offsetsRef.current.get(node.id) || { x: 0, y: 0 }
+          const x = Math.min(Math.max(node.x + offset.x, margin), width - margin)
+          const y = Math.min(Math.max(node.y + offset.y, margin), height - margin)
+          return { ...node, x, y }
+        })
+        const posMap = new Map(adjusted.map((node) => [node.id, node]))
+        lastPositionsRef.current = posMap
 
         const focusedId = focusRef.current
         const visibleTags = focusTagsRef.current || []
@@ -559,23 +597,69 @@ export default function CosmoGraph({
       rafRef.current = requestAnimationFrame(loop)
     }
 
-    const updateScale = (scale) => {
-      const clamped = Math.min(Math.max(scale, 0.75), 1.8)
-      scaleRef.current = clamped
+    svgRef.current = svg
+
+    const clampPan = (value, dimension, scale) => {
+      const tolerance = 48
+      const maxOffset = Math.max(tolerance, (dimension * (scale - 1)) / 1.1)
+      return Math.min(Math.max(value, -maxOffset), maxOffset)
+    }
+
+    const applyViewTransform = (scale = scaleRef.current, pan = panRef.current) => {
+      const clampedScale = Math.min(Math.max(scale, 0.7), 2)
+      scaleRef.current = clampedScale
+      const clampedPan = {
+        x: clampPan(pan.x, width, clampedScale),
+        y: clampPan(pan.y, height, clampedScale),
+      }
+      panRef.current = clampedPan
       scene.setAttribute(
         'transform',
-        `translate(${(1 - clamped) * (width / 2)}, ${(1 - clamped) * (height / 2)}) scale(${clamped})`
+        `translate(${clampedPan.x + (1 - clampedScale) * (width / 2)}, ${clampedPan.y + (1 - clampedScale) * (height / 2)}) scale(${clampedScale})`
       )
+    }
+
+    const updateScale = (scale) => {
+      applyViewTransform(scale, panRef.current)
+    }
+
+    const updatePan = (pan) => {
+      applyViewTransform(scaleRef.current, pan)
     }
     scaleControlRef.current = updateScale
 
+    const getGraphPoint = (evt) => {
+      const rect = svgRef.current?.getBoundingClientRect()
+      if (!rect) return { x: 0, y: 0 }
+      const localX = evt.clientX - rect.left
+      const localY = evt.clientY - rect.top
+      return {
+        x: (localX - panRef.current.x) / scaleRef.current,
+        y: (localY - panRef.current.y) / scaleRef.current,
+      }
+    }
+
     const handlePointerDown = (event) => {
       pointerPositions.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
-      if (!event.target.closest('[data-node-id]')) {
+
+      const nodeTarget = event.target.closest('[data-node-id]')
+      if (!nodeTarget) {
         resetScene()
         onEmptyTap?.()
         setSelection([])
         setResonance(null)
+        panStartRef.current = {
+          pointerId: event.pointerId,
+          origin: { ...panRef.current },
+          start: { x: event.clientX, y: event.clientY },
+        }
+      } else {
+        dragNodeRef.current = {
+          id: nodeTarget.dataset.nodeId,
+          pointerId: event.pointerId,
+          start: getGraphPoint(event),
+          base: offsetsRef.current.get(nodeTarget.dataset.nodeId) || { x: 0, y: 0 },
+        }
       }
 
       if (pointerPositions.current.size === 2) {
@@ -583,6 +667,8 @@ export default function CosmoGraph({
         const dx = points[0].x - points[1].x
         const dy = points[0].y - points[1].y
         pinchStartRef.current = { distance: Math.hypot(dx, dy), scale: scaleRef.current }
+        panStartRef.current = null
+        dragNodeRef.current = null
       }
     }
 
@@ -597,6 +683,27 @@ export default function CosmoGraph({
         const distance = Math.hypot(dx, dy)
         const ratio = distance / pinchStartRef.current.distance
         updateScale(pinchStartRef.current.scale * ratio)
+        return
+      }
+
+      if (dragNodeRef.current && dragNodeRef.current.pointerId === event.pointerId) {
+        const current = getGraphPoint(event)
+        const deltaX = current.x - dragNodeRef.current.start.x
+        const deltaY = current.y - dragNodeRef.current.start.y
+        offsetsRef.current.set(dragNodeRef.current.id, {
+          x: dragNodeRef.current.base.x + deltaX,
+          y: dragNodeRef.current.base.y + deltaY,
+        })
+        return
+      }
+
+      if (panStartRef.current && panStartRef.current.pointerId === event.pointerId) {
+        const dx = event.clientX - panStartRef.current.start.x
+        const dy = event.clientY - panStartRef.current.start.y
+        updatePan({
+          x: panStartRef.current.origin.x + dx,
+          y: panStartRef.current.origin.y + dy,
+        })
       }
     }
 
@@ -605,12 +712,25 @@ export default function CosmoGraph({
       if (pointerPositions.current.size < 2) {
         pinchStartRef.current = null
       }
+      if (dragNodeRef.current?.pointerId === event.pointerId) {
+        dragNodeRef.current = null
+      }
+      if (panStartRef.current?.pointerId === event.pointerId) {
+        panStartRef.current = null
+      }
+    }
+
+    const handleWheel = (event) => {
+      event.preventDefault()
+      const delta = -event.deltaY * 0.001
+      updateScale(scaleRef.current + delta)
     }
 
     svg.addEventListener('pointerdown', handlePointerDown)
     svg.addEventListener('pointermove', handlePointerMove)
     svg.addEventListener('pointerup', handlePointerUp)
     svg.addEventListener('pointercancel', handlePointerUp)
+    svg.addEventListener('wheel', handleWheel, { passive: false })
 
     loop(0)
 
@@ -620,14 +740,18 @@ export default function CosmoGraph({
       svg.removeEventListener('pointermove', handlePointerMove)
       svg.removeEventListener('pointerup', handlePointerUp)
       svg.removeEventListener('pointercancel', handlePointerUp)
+      svg.removeEventListener('wheel', handleWheel)
       svg.replaceChildren()
       window.clearTimeout(highlightTimeout)
     }
-    }, [combinedNodes, links, onEmptyTap, onReset])
+    }, [combinedNodes, links, onEmptyTap, onReset, viewportKey])
 
   useEffect(() => {
     const validIds = new Set(combinedNodes.map((node) => node.id))
     setSelection((previous) => previous.filter((id) => validIds.has(id)))
+    offsetsRef.current = new Map(
+      Array.from(offsetsRef.current.entries()).filter(([id]) => validIds.has(id))
+    )
   }, [combinedNodes])
 
   useEffect(() => {

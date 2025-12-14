@@ -46,31 +46,70 @@ const EMOJI_PALETTE = ['🌙', '🚀', '🌳', '🌊', '🔥', '🪶', '✨', '�
 
 const SAMPLE_ENTRIES = [
   {
-    id: 'entry-1',
-    timestamp: Date.now() - 1000 * 60 * 60 * 5,
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 7).toISOString(),
     text: 'Je cherche du calme et un nouvel élan pour respirer.',
     emoji: '🌙',
     tags: ['calme', 'respiration', 'élan'],
   },
   {
-    id: 'entry-2',
-    timestamp: Date.now() - 1000 * 60 * 60 * 2,
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
     text: 'Je sens mes racines et une braise qui chauffe doucement.',
     emoji: '🌳',
     tags: ['racines', 'braise', 'douceur'],
   },
+  {
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
+    text: 'Une flamme crépite, j ai envie de danser et de partir loin.',
+    emoji: '🔥',
+    tags: ['flamme', 'envie', 'danser', 'voyage'],
+  },
+  {
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+    text: 'Le vent salé transporte une chanson d eau et de lumière.',
+    emoji: '🌊',
+    tags: ['vent', 'mer', 'lumière', 'énergie'],
+  },
+  {
+    timestamp: new Date(Date.now() - 1000 * 60 * 20).toISOString(),
+    text: 'Je respire, je m ancre, j écris pour me souvenir.',
+    emoji: '🪶',
+    tags: ['respiration', 'ancrage', 'écrire', 'mémoire'],
+  },
 ]
+
+function hashEntryId(timestamp, text) {
+  const base = `${timestamp}::${text}`
+  let hash = 0
+  for (let i = 0; i < base.length; i += 1) {
+    hash = (hash * 31 + base.charCodeAt(i)) >>> 0
+  }
+  return `entry-${hash.toString(16)}`
+}
+
+function normalizeEntry(entry) {
+  if (!entry) return null
+  const timestamp = entry.timestamp ? new Date(entry.timestamp).toISOString() : new Date().toISOString()
+  const text = entry.text || ''
+  const id = entry.id || hashEntryId(timestamp, text)
+  return {
+    id,
+    timestamp,
+    text,
+    emoji: entry.emoji || null,
+    tags: entry.tags || null,
+  }
+}
 
 function loadEntries() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return SAMPLE_ENTRIES
+    if (!raw) return SAMPLE_ENTRIES.map(normalizeEntry)
     const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return SAMPLE_ENTRIES
-    return parsed
+    if (!Array.isArray(parsed)) return SAMPLE_ENTRIES.map(normalizeEntry)
+    return parsed.map((item) => normalizeEntry(item)).filter(Boolean)
   } catch (error) {
     console.error('Impossible de charger les entrées locales', error)
-    return SAMPLE_ENTRIES
+    return SAMPLE_ENTRIES.map(normalizeEntry)
   }
 }
 
@@ -140,6 +179,8 @@ function suggestEmojis(tags) {
 function buildGraph(entries) {
   const nodeMap = new Map()
   const linkSet = new Map()
+  const tagCount = new Map()
+  const emojiCount = new Map()
 
   const ensureNode = (id, data) => {
     if (!nodeMap.has(id)) nodeMap.set(id, { ...data })
@@ -147,7 +188,14 @@ function buildGraph(entries) {
 
   const ensureLink = (source, target, weight = 0.6) => {
     const key = `${source}-${target}`
-    if (!linkSet.has(key)) linkSet.set(key, { source, target, weight })
+    if (linkSet.has(key)) {
+      const existing = linkSet.get(key)
+      existing.weight = (existing.weight || 1) + weight
+      existing.distance = Math.max(80, 220 - (existing.weight || 1) * 18)
+      linkSet.set(key, existing)
+    } else {
+      linkSet.set(key, { source, target, weight, distance: Math.max(100, 200 - weight * 12) })
+    }
   }
 
   ensureNode('cosmobulle', { id: 'cosmobulle', label: 'Cosmobulle', emoji: '🪨', level: 'metaphor' })
@@ -157,15 +205,22 @@ function buildGraph(entries) {
 
   entries.forEach((entry) => {
     const verbatimId = `verbatim-${entry.id}`
-    ensureNode(verbatimId, { id: verbatimId, label: entry.text.slice(0, 40) || 'Verbatim', level: 'verbatim' })
+    const tokenCount = tokenize(entry.text).length
+    ensureNode(verbatimId, {
+      id: verbatimId,
+      label: entry.text.slice(0, 40) || 'Verbatim',
+      level: 'verbatim',
+      strength: Math.max(1, Math.min(6, Math.round(tokenCount / 3))),
+    })
 
     const tags = entry.tags || extractTags(entry.text)
 
     tags.forEach((tag) => {
       const tagId = `tag-${tag}`
       ensureNode(tagId, { id: tagId, label: tag, level: 'tag' })
+      tagCount.set(tagId, (tagCount.get(tagId) || 0) + 1)
       if (entry.emoji) {
-        ensureLink(tagId, `emoji-${entry.emoji}`, 0.5)
+        ensureLink(tagId, `emoji-${entry.emoji}`, 0.9)
       } else {
         ensureLink(tagId, 'cosmobulle', 0.4)
       }
@@ -174,9 +229,10 @@ function buildGraph(entries) {
     if (entry.emoji) {
       const emojiId = `emoji-${entry.emoji}`
       ensureNode(emojiId, { id: emojiId, label: entry.emoji, emoji: entry.emoji, level: 'emoji' })
+      emojiCount.set(emojiId, (emojiCount.get(emojiId) || 0) + 1)
       ensureLink('cosmobulle', emojiId, 0.8)
-      ensureLink(emojiId, verbatimId, 0.7)
-      tags.forEach((tag) => ensureLink(emojiId, `tag-${tag}`, 0.7))
+      ensureLink(emojiId, verbatimId, 1)
+      tags.forEach((tag) => ensureLink(emojiId, `tag-${tag}`, 0.8))
 
       emojiToTags.set(emojiId, new Set([...(emojiToTags.get(emojiId) || []), ...tags]))
       emojiToEntries.set(emojiId, [...(emojiToEntries.get(emojiId) || []), entry])
@@ -193,72 +249,161 @@ function buildGraph(entries) {
       const b = emojiIds[j]
       const shared = new Set([...emojiToTags.get(a)].filter((tag) => emojiToTags.get(b).has(tag)))
       if (shared.size) {
-        ensureLink(a, b, 0.6 + shared.size * 0.1)
+        ensureLink(a, b, 0.8 + shared.size * 0.35)
       }
     }
   }
 
-  return { nodes: Array.from(nodeMap.values()), links: Array.from(linkSet.values()), emojiToEntries }
+  const enrichedNodes = Array.from(nodeMap.values()).map((node) => {
+    if (node.level === 'tag') {
+      return { ...node, strength: Math.min(8, tagCount.get(node.id) || 1) }
+    }
+    if (node.level === 'emoji') {
+      return { ...node, strength: Math.min(10, 2 + (emojiCount.get(node.id) || 1) * 2) }
+    }
+    return node
+  })
+
+  return { nodes: enrichedNodes, links: Array.from(linkSet.values()), emojiToEntries }
 }
 
 function App() {
   const [entered, setEntered] = useState(false)
   const [entries, setEntries] = useState(() => loadEntries())
   const [sourceDraft, setSourceDraft] = useState('')
-  const [selectedNode, setSelectedNode] = useState(null)
+  const [focusedEmojiId, setFocusedEmojiId] = useState(null)
+  const [showMemory, setShowMemory] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [editText, setEditText] = useState('')
+  const [editTimestamp, setEditTimestamp] = useState('')
+  const [previousEntries, setPreviousEntries] = useState(null)
+  const [timeCursor, setTimeCursor] = useState(null)
 
   useEffect(() => {
     persistEntries(entries)
   }, [entries])
-
-  const graphData = useMemo(() => buildGraph(entries), [entries])
 
   const handleSubmit = (event) => {
     event.preventDefault()
     const text = sourceDraft.trim()
     if (!text) return
     const tags = extractTags(text)
-    const id = `entry-${Date.now()}`
-    const entry = { id, timestamp: Date.now(), text, emoji: null, tags }
+    const suggested = suggestEmojis(tags)
+    const timestamp = new Date().toISOString()
+    const entry = normalizeEntry({
+      id: hashEntryId(timestamp, text),
+      timestamp,
+      text,
+      emoji: suggested[0] || null,
+      tags,
+    })
+    setPreviousEntries(entries.map((item) => ({ ...item })))
     setEntries((prev) => [...prev, entry])
     setSourceDraft('')
-    setSelectedNode({ type: 'verbatim', entry })
+  }
+
+  const handleEditStart = (entry) => {
+    setEditingId(entry.id)
+    setEditText(entry.text)
+    setEditTimestamp(entry.timestamp || new Date().toISOString())
+    setShowMemory(true)
+  }
+
+  const handleEditSave = () => {
+    const cleaned = editText.trim()
+    if (!cleaned || !editingId) return
+    const updatedTags = extractTags(cleaned)
+    const suggestedEmoji = suggestEmojis(updatedTags)[0] || null
+    setPreviousEntries(entries.map((item) => ({ ...item })))
+    setEntries((prev) =>
+      prev.map((item) =>
+        item.id === editingId
+          ? normalizeEntry({
+              ...item,
+              id: hashEntryId(editTimestamp || item.timestamp, cleaned),
+              text: cleaned,
+              timestamp: editTimestamp || item.timestamp,
+              tags: updatedTags,
+              emoji: item.emoji || suggestedEmoji,
+            })
+          : item
+      )
+    )
+    setEditingId(null)
+  }
+
+  const handleDelete = (id) => {
+    const confirmed = window.confirm('Supprimer cette trace ?')
+    if (!confirmed) return
+    setPreviousEntries(entries.map((item) => ({ ...item })))
+    setEntries((prev) => prev.filter((item) => item.id !== id))
+    if (editingId === id) {
+      setEditingId(null)
+      setEditText('')
+    }
+  }
+
+  const handleUndo = () => {
+    if (previousEntries) {
+      setEntries(previousEntries)
+      setPreviousEntries(null)
+    }
   }
 
   const handleNodeTap = (node) => {
-    if (node.id.startsWith('verbatim-')) {
-      const entryId = node.id.replace('verbatim-', '')
-      const entry = entries.find((item) => item.id === entryId)
-      if (entry) setSelectedNode({ type: 'verbatim', entry })
-      return
-    }
-
     if (node.id.startsWith('emoji-')) {
-      const emojiId = node.id
-      const relatedEntries = graphData.emojiToEntries.get(emojiId) || []
-      setSelectedNode({ type: 'emoji', emoji: node.emoji, entries: relatedEntries })
-      return
+      setFocusedEmojiId(node.id)
     }
-
-    setSelectedNode(null)
   }
 
-  const handleAssignEmoji = (entryId, emoji) => {
-    setEntries((prev) =>
-      prev.map((item) => (item.id === entryId ? { ...item, emoji } : item))
+  const sortedEntries = useMemo(
+    () => [...entries].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()),
+    [entries]
+  )
+
+  const effectiveEntries = useMemo(() => {
+    if (!timeCursor) return sortedEntries
+    return sortedEntries.filter((entry) => new Date(entry.timestamp).getTime() <= timeCursor)
+  }, [sortedEntries, timeCursor])
+
+  const graphData = useMemo(() => buildGraph(effectiveEntries), [effectiveEntries])
+
+  const nodeMap = useMemo(
+    () => new Map(graphData.nodes.map((node) => [node.id, node])),
+    [graphData.nodes]
+  )
+
+  const graphView = useMemo(() => {
+    const baseNodes = graphData.nodes.filter(
+      (node) => node.level === 'metaphor' || node.level === 'emoji'
     )
-  }
+    const baseIds = new Set(baseNodes.map((node) => node.id))
+    const baseLinks = graphData.links.filter(
+      (link) => baseIds.has(link.source) && baseIds.has(link.target)
+    )
 
-  const selectedTags = useMemo(() => {
-    if (selectedNode?.type === 'verbatim') return selectedNode.entry.tags || extractTags(selectedNode.entry.text)
-    if (selectedNode?.type === 'emoji') {
-      const tagSets = (selectedNode.entries || []).map((entry) => entry.tags || extractTags(entry.text))
-      return Array.from(new Set(tagSets.flat()))
-    }
-    return []
-  }, [selectedNode])
+    if (!focusedEmojiId) return { nodes: baseNodes, links: baseLinks }
 
-  const emojiChoices = useMemo(() => suggestEmojis(selectedTags), [selectedTags])
+    const tagIds = new Set()
+    graphData.links.forEach((link) => {
+      if (link.source === focusedEmojiId) {
+        const target = nodeMap.get(link.target)
+        if (target?.level === 'tag') tagIds.add(target.id)
+      }
+      if (link.target === focusedEmojiId) {
+        const source = nodeMap.get(link.source)
+        if (source?.level === 'tag') tagIds.add(source.id)
+      }
+    })
+
+    const tagNodes = graphData.nodes.filter((node) => tagIds.has(node.id))
+    const visibleIds = new Set([...baseIds, ...tagIds])
+    const focusedLinks = graphData.links.filter(
+      (link) => visibleIds.has(link.source) && visibleIds.has(link.target)
+    )
+
+    return { nodes: [...baseNodes, ...tagNodes], links: focusedLinks }
+  }, [focusedEmojiId, graphData.links, graphData.nodes, nodeMap])
 
   if (!entered) {
     return (
@@ -278,79 +423,55 @@ function App() {
 
   return (
     <div className="app-shell">
+      <header className="topline">
+        <div>
+          <p className="brand">ÉchoBulles · Cosmobulle</p>
+          <p className="whisper">Le graphe est la voix principale. Les mots murmurent en arrière-plan.</p>
+        </div>
+        <span className="badge">local · offline</span>
+      </header>
+
       <div className="sky">
         <div className="halo" aria-hidden />
         <div className="graph-stage">
           <CosmoGraph
-            nodes={graphData.nodes}
-            links={graphData.links}
+            nodes={graphView.nodes}
+            links={graphView.links}
+            focusedId={focusedEmojiId}
+            onFocusChange={setFocusedEmojiId}
             onNodeTap={handleNodeTap}
-            onEmptyTap={() => setSelectedNode(null)}
-            onReset={() => setSelectedNode(null)}
+            onEmptyTap={() => setFocusedEmojiId(null)}
+            onReset={() => setFocusedEmojiId(null)}
           />
+          <div className="graph-overlay">
+            <p className="overlay-line">Vue globale : tap pour zoomer sur une métabulle.</p>
+            {focusedEmojiId && <p className="overlay-line">Retour : bouton ← ou tap dans le vide pour la cosmobulle.</p>}
+          </div>
         </div>
       </div>
 
-      <div className="detail-panel">
-        <div className="panel-head">
-          <p className="panel-title">Mémoire vivante</p>
-          <p className="panel-sub">Aucune donnée ne quitte cet appareil.</p>
-        </div>
-
-        {selectedNode?.type === 'verbatim' && (
-          <div className="card">
-            <p className="micro-label">Verbatim</p>
-            <p className="verbatim-text">{selectedNode.entry.text}</p>
-            <div className="tag-row">
-              {(selectedNode.entry.tags || []).map((tag) => (
-                <span key={tag} className="tag-chip">
-                  ✧ {tag}
-                </span>
-              ))}
+      <div className="control-row">
+        <button type="button" className="ghost" onClick={() => setShowMemory(true)}>
+          Mémoire vivante
+        </button>
+        {sortedEntries.length > 1 && (
+          <div className="timeline">
+            <label htmlFor="timeRange">⏳ Machine à remonter le temps</label>
+            <input
+              id="timeRange"
+              type="range"
+              min={new Date(sortedEntries[0].timestamp).getTime()}
+              max={new Date(sortedEntries[sortedEntries.length - 1].timestamp).getTime()}
+              value={timeCursor || new Date(sortedEntries[sortedEntries.length - 1].timestamp).getTime()}
+              onChange={(event) => setTimeCursor(Number(event.target.value))}
+            />
+            <div className="timeline-meta">
+              <span>{new Date(sortedEntries[0].timestamp).toLocaleDateString()}</span>
+              <button type="button" onClick={() => setTimeCursor(null)} className="linkish">
+                plein champ
+              </button>
+              <span>{new Date(sortedEntries[sortedEntries.length - 1].timestamp).toLocaleDateString()}</span>
             </div>
-            <div className="emoji-row">
-              <p className="micro-label">Associer un symbole</p>
-              <div className="chips">
-                {emojiChoices.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    className={`chip ${selectedNode.entry.emoji === emoji ? 'chip-active' : ''}`}
-                    onClick={() => handleAssignEmoji(selectedNode.entry.id, emoji)}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {selectedNode?.type === 'emoji' && (
-          <div className="card">
-            <p className="micro-label">Champ sémantique</p>
-            <p className="emoji-focus">{selectedNode.emoji}</p>
-            <div className="tag-row">
-              {selectedTags.map((tag) => (
-                <span key={tag} className="tag-chip">
-                  ✧ {tag}
-                </span>
-              ))}
-            </div>
-            <div className="verbatim-list">
-              {(selectedNode.entries || []).map((entry) => (
-                <p key={entry.id} className="verbatim-text">
-                  {entry.text}
-                </p>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {!selectedNode && (
-          <div className="card">
-            <p className="micro-label">Geste</p>
-            <p className="verbatim-text">Dépose un mot, puis touche une bulle pour écouter ce qui résonne.</p>
           </div>
         )}
       </div>
@@ -374,6 +495,89 @@ function App() {
           </button>
         </div>
       </form>
+
+      {showMemory && (
+        <div className="memory-layer" role="dialog" aria-label="Mémoire vivante">
+          <div className="memory-panel">
+            <div className="memory-head">
+              <div>
+                <p className="panel-title">Mémoire vivante</p>
+                <p className="panel-sub">Chaque ligne est une trace, le graphe se recalculera toujours.</p>
+              </div>
+              <div className="memory-actions">
+                <button type="button" className="ghost" onClick={handleUndo} disabled={!previousEntries}>
+                  ↩ Annuler
+                </button>
+                <button type="button" className="ghost" onClick={() => setShowMemory(false)}>
+                  Fermer
+                </button>
+              </div>
+            </div>
+
+            <div className="memory-list" aria-live="polite">
+              {sortedEntries.map((entry) => {
+                const isEditing = editingId === entry.id
+                return (
+                  <div key={entry.id} className="memory-card">
+                    <div className="memory-meta">
+                      <span className="pill">{new Date(entry.timestamp).toLocaleString()}</span>
+                      {entry.emoji && <span className="pill soft">{entry.emoji}</span>}
+                    </div>
+                    {isEditing ? (
+                      <div className="edit-block">
+                        <label className="sr-only" htmlFor={`text-${entry.id}`}>
+                          Texte à modifier
+                        </label>
+                        <textarea
+                          id={`text-${entry.id}`}
+                          value={editText}
+                          onChange={(event) => setEditText(event.target.value)}
+                          rows={3}
+                        />
+                        <label className="mini" htmlFor={`ts-${entry.id}`}>
+                          Horodatage (ISO)
+                        </label>
+                        <input
+                          id={`ts-${entry.id}`}
+                          type="datetime-local"
+                          value={editTimestamp ? editTimestamp.slice(0, 16) : ''}
+                          onChange={(event) => {
+                            const nextValue = event.target.value
+                            if (!nextValue) return
+                            const parsed = new Date(nextValue)
+                            if (Number.isNaN(parsed.getTime())) return
+                            setEditTimestamp(parsed.toISOString())
+                          }}
+                        />
+                        <div className="edit-actions">
+                          <button type="button" className="primary" onClick={handleEditSave}>
+                            ✔ Enregistrer
+                          </button>
+                          <button type="button" className="ghost" onClick={() => setEditingId(null)}>
+                            ↩ Annuler
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="memory-text">{entry.text}</p>
+                    )}
+                    {!isEditing && (
+                      <div className="memory-actions">
+                        <button type="button" className="ghost" onClick={() => handleEditStart(entry)}>
+                          ✏️ Modifier
+                        </button>
+                        <button type="button" className="ghost danger" onClick={() => handleDelete(entry.id)}>
+                          🗑 Supprimer
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

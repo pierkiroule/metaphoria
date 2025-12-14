@@ -316,3 +316,29 @@ textarea:focus {
   border: 1px solid #e0e7ff;
   min-width: 0;
 }
+
+.cosmo-graph {
+  margin-top: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cosmo-graph__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cosmo-graph__svg {
+  width: 100%;
+  max-width: 420px;
+  border: 1px dashed #e5e7eb;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f8fafc 0%, #fefefe 100%);
+  align-self: center;
+}

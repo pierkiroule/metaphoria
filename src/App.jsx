@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import './App.css'
 import { generateResonantMorphosis } from './resonantMorphosis'
 import GraphView from './components/GraphView'
+import CosmoGraph from './components/CosmoGraph'
 
 const DEFAULT_TEXT = "Je suis fatigué, tout me semble lourd et je n’avance plus."
 
@@ -106,6 +107,8 @@ function App() {
           </div>
 
           <GraphView nodes={morphosis.graphNodes} links={morphosis.graphLinks} mode="list" />
+
+          <CosmoGraph nodes={morphosis.graphNodes} links={morphosis.graphLinks} />
 
           <div className="list-grid">
             <div>

@@ -16,20 +16,23 @@ const TYPE_STYLE = {
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
-function craftResonanceEcho(nodeA, nodeB) {
-  if (!nodeA || !nodeB) return ''
-  const labelA = nodeA.label || nodeA.id
-  const labelB = nodeB.label || nodeB.id
-  const typeA = nodeA.level || nodeA.type || 'fragment'
-  const typeB = nodeB.level || nodeB.type || 'fragment'
+function craftResonanceEcho(nodes) {
+  if (!nodes?.length) return ''
+  if (nodes.length === 1) {
+    const solo = nodes[0]
+    return `${solo.label || solo.id} vibre en solo.`
+  }
+
+  const labels = nodes.map((n) => n.label || n.id)
+  const types = nodes.map((n) => n.level || n.type || 'fragment')
 
   const palette = [
-    `Un souffle ${typeA}-${typeB} relie ${labelA} et ${labelB}.`,
-    `${labelA} et ${labelB} scintillent en tandem, comme deux ${typeA}s complices.`,
-    `Entre ${labelA} et ${labelB}, une onde douce murmure un nouvel écho.`,
+    `${labels.join(' + ')} relient leurs ondes (${types.join('/')}).`,
+    `${labels.join(' · ')} forment une chambre d’écho douce.`,
+    `${labels[0]} et ${labels[1]} ouvrent un passage${labels[2] ? ` avec ${labels[2]}` : ''}.`,
   ]
 
-  return palette[(labelA.length + labelB.length) % palette.length]
+  return palette[(labels.join('').length + types.join('').length) % palette.length]
 }
 
 function createSvgElement(name, attributes = {}, parent) {
@@ -318,6 +321,8 @@ export default function CosmoGraph({
   onMurmur,
   onEmptyTap,
   onReset,
+  onNodeTap,
+  onSelectionChange,
 }) {
   const containerRef = useRef(null)
   const rafRef = useRef(null)
@@ -421,6 +426,7 @@ export default function CosmoGraph({
         linkAPI.highlightNode(node.id)
         onMurmur?.(craftMurmur(node))
         if (node.level !== 'tag') setFocusedEmoji(node.id)
+        if (node.emoji) onNodeTap?.(node)
       },
       onLongPress: (node) => {
         if (node.level === 'metaphor' || node.level === 'tag') {
@@ -433,8 +439,8 @@ export default function CosmoGraph({
       onDoubleTap: (node) => {
         setSelection((previous) => {
           if (previous.includes(node.id)) return previous
-          const next = [...previous.slice(-1), node.id]
-          return next
+          const next = [...previous.slice(-2), node.id]
+          return next.slice(-3)
         })
       },
     })
@@ -520,13 +526,13 @@ export default function CosmoGraph({
         nodeAPI.updatePositions(posMap)
         nodeAPI.pulse(timestamp, activeMetaphorRef.current)
 
-        if (resonanceStateRef.current?.pair?.length === 2 && resonanceRef.current) {
-          const [first, second] = resonanceStateRef.current.pair
-          const a = posMap.get(first)
-          const b = posMap.get(second)
-          if (a && b) {
-            const midX = (a.x + b.x) / 2
-            const midY = (a.y + b.y) / 2
+        if (resonanceStateRef.current?.pair?.length >= 2 && resonanceRef.current) {
+          const points = resonanceStateRef.current.pair
+            .map((id) => posMap.get(id))
+            .filter(Boolean)
+          if (points.length >= 2) {
+            const midX = points.reduce((sum, p) => sum + p.x, 0) / points.length
+            const midY = points.reduce((sum, p) => sum + p.y, 0) / points.length
             resonanceRef.current.group.setAttribute('transform', `translate(${midX},${midY})`)
             resonanceRef.current.group.setAttribute('opacity', '1')
             resonanceRef.current.text.textContent = resonanceStateRef.current.text || ''
@@ -630,12 +636,12 @@ export default function CosmoGraph({
   }, [combinedNodes])
 
   useEffect(() => {
-    if (selection.length === 2) {
-      const [first, second] = selection
-      const a = combinedNodes.find((node) => node.id === first)
-      const b = combinedNodes.find((node) => node.id === second)
-      if (a && b) {
-        setResonance({ pair: selection, text: craftResonanceEcho(a, b) })
+    if (selection.length >= 2) {
+      const selectedNodes = selection
+        .map((id) => combinedNodes.find((node) => node.id === id))
+        .filter(Boolean)
+      if (selectedNodes.length >= 2) {
+        setResonance({ pair: selection, text: craftResonanceEcho(selectedNodes) })
       } else {
         setResonance(null)
       }
@@ -663,13 +669,14 @@ export default function CosmoGraph({
     if (!resonance && resonanceRef.current) {
       resonanceRef.current.group.setAttribute('opacity', '0')
     }
-  }, [resonance])
+    onSelectionChange?.(selection, resonance?.text)
+  }, [resonance, selection, onSelectionChange])
 
   useEffect(() => {
     const { nodeAPI, linkAPI } = graphAPIRef.current
     if (!nodeAPI || !linkAPI) return undefined
 
-    if (selection.length === 2) {
+    if (selection.length >= 2) {
       nodeAPI.focusPair(selection)
       linkAPI.highlightPair(selection)
     } else if (selection.length === 1) {

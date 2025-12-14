@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 const ORBITS = {
-  metaphor: 110,
-  emoji: 110,
-  tag: 80,
+  metaphor: 90,
+  emoji: 140,
+  tag: 190,
+  verbatim: 240,
   word: 130,
-  echo: 190,
+  echo: 210,
 }
 
 const TYPE_STYLE = {
   metaphor: { radius: 30, color: '#fbbf24' },
   emoji: { radius: 24, color: '#fef3c7' },
   tag: { radius: 16, color: '#60a5fa' },
+  verbatim: { radius: 10, color: '#38bdf8' },
   word: { radius: 5, color: '#94a3b8' },
   echo: { radius: 14, color: '#bae6fd' },
 }
@@ -56,6 +58,7 @@ export function computeOrbitalPositions(nodes, width, height, time = 0) {
     metaphor: [],
     emoji: [],
     tag: [],
+    verbatim: [],
     word: [],
     echo: [],
     other: [],
@@ -100,6 +103,7 @@ export function computeOrbitalPositions(nodes, width, height, time = 0) {
 
   placeRing(grouped.emoji, ORBITS.emoji || ORBITS.metaphor || 120)
   placeRing(grouped.tag, ORBITS.tag)
+  placeRing(grouped.verbatim, ORBITS.verbatim)
   placeRing(grouped.word, ORBITS.word)
   placeRing(grouped.echo, ORBITS.echo)
   placeRing(grouped.other, ORBITS.word)

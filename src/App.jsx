@@ -48,6 +48,49 @@ const TAG_MAPPINGS = {
   pierre: { emoji: '🪨', tags: ['solidité', 'appui', 'gravité'] },
 }
 
+const KEYWORD_HINTS = {
+  calme: ['calme', 'paisible', 'silence', 'doux', 'repos', 'lune', 'nuit'],
+  elan: ['élan', 'depart', 'audace', 'envie', 'bouger', 'mouvement', 'lancer'],
+  racines: ['racine', 'terre', 'ancrage', 'famille', 'origin', 'sol', 'tronc'],
+  vague: ['vague', 'eau', 'mer', 'flux', 'houle', 'pluie', 'courant'],
+  braise: ['feu', 'braise', 'ardeur', 'ardent', 'chaleur', 'flamme', 'volcan'],
+  plume: ['plume', 'air', 'léger', 'écrire', 'brise', 'vent', 'souffle'],
+  etoile: ['étoile', 'ciel', 'cosmos', 'nuit', 'galaxie', 'lumière', 'briller'],
+}
+
+const AVAILABLE_KEYS = Object.keys(TAG_MAPPINGS)
+
+function chooseSemanticKeys(text, tokens) {
+  const cleaned = text.toLowerCase()
+  const keys = new Set()
+
+  AVAILABLE_KEYS.forEach((key) => {
+    if (cleaned.includes(key)) keys.add(key)
+  })
+
+  AVAILABLE_KEYS.forEach((key) => {
+    const mapping = TAG_MAPPINGS[key]
+    const tags = mapping.tags || []
+    const hints = KEYWORD_HINTS[key] || []
+    const allHints = [...tags, ...hints]
+    const match = tokens.some((token) => allHints.some((hint) => token.includes(hint) || hint.includes(token)))
+    if (match) keys.add(key)
+  })
+
+  if (!keys.size && tokens.length) {
+    const first = tokens[0]
+    const fallbackKey = AVAILABLE_KEYS.find((key) => KEYWORD_HINTS[key]?.some((hint) => first.includes(hint)))
+    if (fallbackKey) {
+      keys.add(fallbackKey)
+    } else {
+      const chosen = AVAILABLE_KEYS[first.charCodeAt(0) % AVAILABLE_KEYS.length]
+      keys.add(chosen)
+    }
+  }
+
+  return Array.from(keys)
+}
+
 const PUNCHLINE_LIBRARY = {
   calme: [
     '🌙 Calme : une marée basse qui laisse respirer les rives.',
@@ -91,7 +134,7 @@ const DEFAULT_TEXT = ''
 function metabolizeTextToGraph(text, graph) {
   const cleaned = text.toLowerCase()
   const tokens = cleaned.split(/[^a-zà-ÿœæ0-9]+/i).filter(Boolean)
-  const foundKeys = Object.keys(TAG_MAPPINGS).filter((key) => cleaned.includes(key))
+  const foundKeys = chooseSemanticKeys(cleaned, tokens)
 
   const nextNodes = new Map(graph.nodes.map((node) => [node.id, node]))
   const nextLinks = new Map(graph.links.map((link, index) => [`${link.source}-${link.target}-${index}`, link]))
@@ -126,17 +169,6 @@ function metabolizeTextToGraph(text, graph) {
         ensureLink(foundKeys[i], foundKeys[j], 0.75)
       }
     }
-  }
-
-  if (!foundKeys.length && tokens.length) {
-    const fallbackId = `murmure-${Date.now()}`
-    nextNodes.set(fallbackId, {
-      id: fallbackId,
-      label: tokens.slice(0, 2).join(' '),
-      emoji: '🫧',
-      level: 'echo',
-    })
-    ensureLink('cosmobulle', fallbackId, 0.5)
   }
 
   return { nodes: Array.from(nextNodes.values()), links: Array.from(nextLinks.values()) }

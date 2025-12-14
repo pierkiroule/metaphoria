@@ -27,7 +27,6 @@ function createSvgElement(name, attributes = {}, parent) {
   return element
 }
 
-// Calcule les coordonnées orbitales pour chaque nœud en fonction de son index.
 export function computeOrbitalPositions(nodes, width, height, time = 0) {
   const cx = width / 2
   const cy = height / 2
@@ -81,7 +80,6 @@ export function computeOrbitalPositions(nodes, width, height, time = 0) {
       })
     })
   } else if (nodes.length) {
-    // Si aucune métaphore n’est définie, on place le premier nœud au centre.
     const fallback = nodes[0]
     positions.push({ ...fallback, level: fallback.level || fallback.type, x: cx, y: cy })
   }
@@ -94,7 +92,6 @@ export function computeOrbitalPositions(nodes, width, height, time = 0) {
   return positions
 }
 
-// Dessine les liens SVG en fonction des positions calculées.
 export function drawLinks(svg, links) {
   const linkGroup = createSvgElement('g', { stroke: '#cbd5e1', 'stroke-opacity': 0.45 }, svg)
 
@@ -118,32 +115,34 @@ export function drawLinks(svg, links) {
     })
   }
 
-  return { updatePositions }
+  const highlightNode = (nodeId) => {
+    linkElements.forEach(({ line, link }) => {
+      const connected = link.source === nodeId || link.target === nodeId
+      line.setAttribute('stroke-opacity', connected ? '0.95' : '0.08')
+      line.setAttribute('stroke-width', connected ? Math.max(1.4, (link.weight || 1) * 1.1) : '0.8')
+    })
+  }
+
+  const reset = () => {
+    linkElements.forEach(({ line, link }) => {
+      line.setAttribute('stroke-opacity', '0.45')
+      line.setAttribute('stroke-width', Math.max(1, (link.weight || link.strength || 1) * 0.8))
+    })
+  }
+
+  return { updatePositions, highlightNode, reset }
 }
 
-// Dessine les nœuds orbitaux avec des cercles colorés et emojis.
-export function drawNodes(svg, nodes) {
+export function drawNodes(svg, nodes, handlers = {}) {
   const nodeGroup = createSvgElement('g', {}, svg)
-
-  const resetHighlight = () => {
-    nodeGroup.querySelectorAll('circle').forEach((circle) => {
-      circle.setAttribute('opacity', '0.92')
-    })
-  }
-
-  const highlight = (nodeId) => {
-    nodeGroup.querySelectorAll('circle').forEach((circle) => {
-      const isTarget = circle.dataset.nodeId === nodeId
-      circle.setAttribute('opacity', isTarget ? '1' : '0.25')
-    })
-  }
 
   const nodeElements = nodes.map((node) => {
     const group = createSvgElement('g', {}, nodeGroup)
+    const baseRadius = TYPE_STYLE[node.level]?.radius || 10
     const circle = createSvgElement(
       'circle',
       {
-        r: TYPE_STYLE[node.level]?.radius || 10,
+        r: baseRadius,
         fill: TYPE_STYLE[node.level]?.color || '#cbd5e1',
         'fill-opacity': node.level === 'echo' ? 0.7 : 0.92,
         'data-node-id': node.id,
@@ -151,6 +150,7 @@ export function drawNodes(svg, nodes) {
       group
     )
     circle.dataset.nodeId = node.id
+    circle.dataset.baseRadius = String(baseRadius)
 
     createSvgElement(
       'text',
@@ -165,22 +165,33 @@ export function drawNodes(svg, nodes) {
     let pressTimer
 
     group.addEventListener('pointerdown', () => {
-      pressTimer = window.setTimeout(() => highlight(node.id), 520)
+      pressTimer = window.setTimeout(() => handlers.onLongPress?.(node), 520)
     })
 
     group.addEventListener('pointerup', () => {
       window.clearTimeout(pressTimer)
-      console.log('CosmoGraph node', node)
-      resetHighlight()
+      handlers.onTap?.(node)
     })
 
     group.addEventListener('pointerleave', () => {
       window.clearTimeout(pressTimer)
-      resetHighlight()
     })
 
     return { group, circle, node }
   })
+
+  const highlightNode = (nodeId) => {
+    nodeElements.forEach(({ circle, node }) => {
+      const isTarget = node.id === nodeId
+      circle.setAttribute('opacity', isTarget ? '1' : '0.25')
+    })
+  }
+
+  const resetHighlight = () => {
+    nodeElements.forEach(({ circle, node }) => {
+      circle.setAttribute('opacity', node.level === 'echo' ? '0.82' : '0.92')
+    })
+  }
 
   const updatePositions = (posMap) => {
     nodeElements.forEach(({ group, node }) => {
@@ -189,12 +200,25 @@ export function drawNodes(svg, nodes) {
     })
   }
 
-  return { updatePositions }
+  const pulse = (time, activeId) => {
+    nodeElements.forEach(({ circle, node }) => {
+      const baseRadius = Number(circle.dataset.baseRadius) || 10
+      if (node.id === activeId) {
+        const delta = Math.sin(time * 0.003) * 3
+        circle.setAttribute('r', String(baseRadius + delta))
+      } else {
+        circle.setAttribute('r', String(baseRadius))
+      }
+    })
+  }
+
+  return { updatePositions, highlightNode, resetHighlight, pulse }
 }
 
-export default function CosmoGraph({ nodes = [], links = [] }) {
+export default function CosmoGraph({ nodes = [], links = [], onEchoSelect, debug = false }) {
   const containerRef = useRef(null)
   const rafRef = useRef(null)
+  const activeMetaphorRef = useRef(null)
 
   useEffect(() => {
     const el = containerRef.current
@@ -215,6 +239,7 @@ export default function CosmoGraph({ nodes = [], links = [] }) {
         role: 'img',
         'aria-label': 'CosmoGraph orbital',
         'touch-action': 'manipulation',
+        style: 'background:#0b1221; border-radius:12px;',
       },
       el
     )
@@ -228,7 +253,7 @@ export default function CosmoGraph({ nodes = [], links = [] }) {
           x: width / 2,
           y: height / 2,
           'text-anchor': 'middle',
-          fill: '#475569',
+          fill: '#cbd5e1',
           'font-size': '16px',
         },
         svg
@@ -238,8 +263,38 @@ export default function CosmoGraph({ nodes = [], links = [] }) {
       }
     }
 
+    let highlightTimeout
+
     const linkAPI = drawLinks(svg, links)
-    const nodeAPI = drawNodes(svg, nodes)
+    const nodeAPI = drawNodes(svg, nodes, {
+      onTap: (node) => {
+        window.clearTimeout(highlightTimeout)
+        if (node.level === 'echo') {
+          onEchoSelect?.(node.label)
+        } else if (node.level === 'tag') {
+          nodeAPI.highlightNode(node.id)
+          linkAPI.highlightNode(node.id)
+          highlightTimeout = window.setTimeout(() => {
+            nodeAPI.resetHighlight()
+            linkAPI.reset()
+          }, 1200)
+        } else if (node.level === 'metaphor') {
+          activeMetaphorRef.current = node.id
+          nodeAPI.highlightNode(node.id)
+          highlightTimeout = window.setTimeout(() => {
+            nodeAPI.resetHighlight()
+            activeMetaphorRef.current = null
+          }, 1600)
+        } else {
+          nodeAPI.resetHighlight()
+          linkAPI.reset()
+        }
+      },
+      onLongPress: (node) => {
+        nodeAPI.highlightNode(node.id)
+        linkAPI.highlightNode(node.id)
+      },
+    })
 
     const safeRender = (timestamp) => {
       try {
@@ -248,6 +303,7 @@ export default function CosmoGraph({ nodes = [], links = [] }) {
 
         linkAPI.updatePositions(posMap)
         nodeAPI.updatePositions(posMap)
+        nodeAPI.pulse(timestamp, activeMetaphorRef.current)
       } catch (error) {
         console.error('CosmoGraph render error', error)
         svg.replaceChildren()
@@ -275,8 +331,9 @@ export default function CosmoGraph({ nodes = [], links = [] }) {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
       svg.replaceChildren()
+      window.clearTimeout(highlightTimeout)
     }
-  }, [nodes, links])
+  }, [nodes, links, onEchoSelect])
 
   return (
     <div
@@ -285,12 +342,19 @@ export default function CosmoGraph({ nodes = [], links = [] }) {
         width: '100%',
         height: '100%',
         minHeight: '320px',
-        background: '#0b1221',
+        background: 'transparent',
         color: '#e2e8f0',
         borderRadius: '8px',
         overflow: 'hidden',
+        touchAction: 'manipulation',
       }}
       aria-live="polite"
-    />
+    >
+      {debug && (
+        <p style={{ margin: '8px 12px', color: '#94a3b8', fontSize: '13px' }}>
+          Debug : {nodes.length} nœuds, {links.length} liens
+        </p>
+      )}
+    </div>
   )
 }

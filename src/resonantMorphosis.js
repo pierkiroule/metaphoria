@@ -116,7 +116,7 @@ function tokenize(text) {
   // by explicitly covering common latin ranges. This keeps the app from failing to load with
   // a blank screen on devices that don't support the more modern regex features.
   return text
-    .split(/[^A-Za-z0-9À-ÖØ-öø-ÿœŒæÆçÇñÑ'-]+/)
+    .split(/[^a-zA-Z0-9À-ÿ]+/)
     .map((token) => token.trim().toLowerCase())
     .filter((token) => token && !stopWords.has(token))
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 const ORBITS = {
   metaphor: 0,
@@ -15,6 +15,22 @@ const TYPE_STYLE = {
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
+
+function craftResonanceEcho(nodeA, nodeB) {
+  if (!nodeA || !nodeB) return ''
+  const labelA = nodeA.label || nodeA.id
+  const labelB = nodeB.label || nodeB.id
+  const typeA = nodeA.level || nodeA.type || 'fragment'
+  const typeB = nodeB.level || nodeB.type || 'fragment'
+
+  const palette = [
+    `Un souffle ${typeA}-${typeB} relie ${labelA} et ${labelB}.`,
+    `${labelA} et ${labelB} scintillent en tandem, comme deux ${typeA}s complices.`,
+    `Entre ${labelA} et ${labelB}, une onde douce murmure un nouvel écho.`,
+  ]
+
+  return palette[(labelA.length + labelB.length) % palette.length]
+}
 
 function createSvgElement(name, attributes = {}, parent) {
   const element = document.createElementNS(SVG_NS, name)
@@ -123,6 +139,19 @@ export function drawLinks(layer, links) {
     })
   }
 
+  const highlightPair = (ids) => {
+    const setFocus = new Set(ids)
+    linkElements.forEach(({ line, link }) => {
+      const connectsPair = setFocus.has(link.source) && setFocus.has(link.target)
+      const touches = setFocus.has(link.source) || setFocus.has(link.target)
+      line.setAttribute('stroke-opacity', connectsPair ? '0.95' : touches ? '0.35' : '0.05')
+      line.setAttribute(
+        'stroke-width',
+        connectsPair ? Math.max(1.8, (link.weight || 1) * 1.25) : touches ? Math.max(1.2, (link.weight || 1) * 0.9) : '0.6'
+      )
+    })
+  }
+
   const reset = () => {
     linkElements.forEach(({ line, link }) => {
       line.setAttribute('stroke-opacity', '0.45')
@@ -130,11 +159,13 @@ export function drawLinks(layer, links) {
     })
   }
 
-  return { updatePositions, highlightNode, reset }
+  return { updatePositions, highlightNode, highlightPair, reset }
 }
 
 export function drawNodes(layer, nodes, handlers = {}) {
   const nodeGroup = createSvgElement('g', {}, layer)
+
+  const lastTap = { id: null, time: 0 }
 
   const nodeElements = nodes.map((node) => {
     const group = createSvgElement('g', {}, nodeGroup)
@@ -170,13 +201,31 @@ export function drawNodes(layer, nodes, handlers = {}) {
     }
 
     let pressTimer
+    let longPressed = false
 
     group.addEventListener('pointerdown', () => {
-      pressTimer = window.setTimeout(() => handlers.onLongPress?.(node), 520)
+      longPressed = false
+      pressTimer = window.setTimeout(() => {
+        longPressed = true
+        handlers.onLongPress?.(node)
+      }, 520)
     })
 
     group.addEventListener('pointerup', () => {
       window.clearTimeout(pressTimer)
+      if (longPressed) return
+
+      const now = Date.now()
+      const isDoubleTap = lastTap.id === node.id && now - lastTap.time < 320
+      if (isDoubleTap) {
+        lastTap.id = null
+        lastTap.time = 0
+        handlers.onDoubleTap?.(node)
+        return
+      }
+
+      lastTap.id = node.id
+      lastTap.time = now
       handlers.onTap?.(node)
     })
 
@@ -193,6 +242,16 @@ export function drawNodes(layer, nodes, handlers = {}) {
       circle.setAttribute('opacity', isTarget ? '1' : '0.2')
       circle.setAttribute('stroke-width', isTarget ? '8' : circle.dataset.baseStrokeWidth)
       circle.setAttribute('stroke', isTarget ? 'rgba(255,255,255,0.35)' : circle.dataset.baseStroke)
+    })
+  }
+
+  const focusPair = (pairIds) => {
+    const setFocus = new Set(pairIds)
+    nodeElements.forEach(({ circle, node }) => {
+      const isTarget = setFocus.has(node.id)
+      circle.setAttribute('opacity', isTarget ? '1' : '0.12')
+      circle.setAttribute('stroke-width', isTarget ? '8' : circle.dataset.baseStrokeWidth)
+      circle.setAttribute('stroke', isTarget ? 'rgba(255,255,255,0.45)' : circle.dataset.baseStroke)
     })
   }
 
@@ -223,7 +282,7 @@ export function drawNodes(layer, nodes, handlers = {}) {
     })
   }
 
-  return { updatePositions, focusNode, resetHighlight, pulse }
+  return { updatePositions, focusNode, focusPair, resetHighlight, pulse }
 }
 
 export default function CosmoGraph({
@@ -240,6 +299,14 @@ export default function CosmoGraph({
   const scaleRef = useRef(1)
   const pinchStartRef = useRef(null)
   const pointerPositions = useRef(new Map())
+  const resonanceRef = useRef(null)
+  const resonanceStateRef = useRef(null)
+  const graphAPIRef = useRef({})
+  const [selection, setSelection] = useState([])
+  const [resonance, setResonance] = useState(null)
+  const [stableEchoes, setStableEchoes] = useState([])
+
+  const combinedNodes = useMemo(() => [...nodes, ...stableEchoes], [nodes, stableEchoes])
 
   useEffect(() => {
     const el = containerRef.current
@@ -267,7 +334,7 @@ export default function CosmoGraph({
 
     const scene = createSvgElement('g', {}, svg)
 
-    const nodesAvailable = nodes.length > 0
+    const nodesAvailable = combinedNodes.length > 0
 
     if (!nodesAvailable) {
       createSvgElement(
@@ -289,7 +356,7 @@ export default function CosmoGraph({
     let highlightTimeout
 
     const linkAPI = drawLinks(scene, links)
-    const nodeAPI = drawNodes(scene, nodes, {
+    const nodeAPI = drawNodes(scene, combinedNodes, {
       onTap: (node) => {
         window.clearTimeout(highlightTimeout)
         activeMetaphorRef.current = node.level === 'metaphor' ? node.id : null
@@ -303,23 +370,88 @@ export default function CosmoGraph({
         linkAPI.highlightNode(node.id)
         if (node.level === 'echo') onEchoLongPress?.(node.label)
       },
+      onDoubleTap: (node) => {
+        setSelection((previous) => {
+          if (previous.includes(node.id)) return previous
+          const next = [...previous.slice(-1), node.id]
+          return next
+        })
+      },
+    })
+
+    const resonanceGroup = createSvgElement('g', { opacity: 0, 'pointer-events': 'auto' }, scene)
+    const resonanceCircle = createSvgElement(
+      'circle',
+      { r: 18, fill: 'rgba(244, 244, 255, 0.65)', stroke: 'rgba(255,255,255,0.55)', 'stroke-width': 2 },
+      resonanceGroup
+    )
+    const resonanceText = createSvgElement(
+      'text',
+      { 'text-anchor': 'middle', dy: '0.35em', fill: '#0f172a', 'font-size': '11px', 'font-weight': '600' },
+      resonanceGroup
+    )
+    resonanceRef.current = { group: resonanceGroup, text: resonanceText, circle: resonanceCircle }
+    graphAPIRef.current = { nodeAPI, linkAPI }
+
+    let resonancePress
+
+    resonanceGroup.addEventListener('pointerdown', () => {
+      resonancePress = window.setTimeout(() => {
+        if (!resonanceStateRef.current?.text) return
+        setStableEchoes((prev) => [
+          ...prev,
+          {
+            id: `resonance-${Date.now()}`,
+            label: resonanceStateRef.current.text,
+            level: 'echo',
+            emoji: '🫧',
+          },
+        ])
+      }, 560)
+    })
+
+    resonanceGroup.addEventListener('pointerup', () => {
+      window.clearTimeout(resonancePress)
+    })
+
+    resonanceGroup.addEventListener('pointerleave', () => {
+      window.clearTimeout(resonancePress)
     })
 
     const resetScene = () => {
       activeMetaphorRef.current = null
       nodeAPI.resetHighlight()
       linkAPI.reset()
+      setSelection([])
+      setResonance(null)
       onReset?.()
     }
 
     const safeRender = (timestamp) => {
       try {
-        const positioned = computeOrbitalPositions(nodes, width, height, timestamp)
+        const positioned = computeOrbitalPositions(combinedNodes, width, height, timestamp)
         const posMap = new Map(positioned.map((node) => [node.id, node]))
 
         linkAPI.updatePositions(posMap)
         nodeAPI.updatePositions(posMap)
         nodeAPI.pulse(timestamp, activeMetaphorRef.current)
+
+        if (resonanceStateRef.current?.pair?.length === 2 && resonanceRef.current) {
+          const [first, second] = resonanceStateRef.current.pair
+          const a = posMap.get(first)
+          const b = posMap.get(second)
+          if (a && b) {
+            const midX = (a.x + b.x) / 2
+            const midY = (a.y + b.y) / 2
+            resonanceRef.current.group.setAttribute('transform', `translate(${midX},${midY})`)
+            resonanceRef.current.group.setAttribute('opacity', '1')
+            resonanceRef.current.text.textContent = resonanceStateRef.current.text || ''
+          } else {
+            resonanceRef.current.group.setAttribute('opacity', '0')
+          }
+        } else if (resonanceRef.current) {
+          resonanceRef.current.group.setAttribute('opacity', '0')
+        }
       } catch (error) {
         console.error('CosmoGraph render error', error)
         svg.replaceChildren()
@@ -356,6 +488,8 @@ export default function CosmoGraph({
       if (!event.target.closest('[data-node-id]')) {
         resetScene()
         onEmptyTap?.()
+        setSelection([])
+        setResonance(null)
       }
 
       if (pointerPositions.current.size === 2) {
@@ -403,7 +537,52 @@ export default function CosmoGraph({
       svg.replaceChildren()
       window.clearTimeout(highlightTimeout)
     }
-  }, [nodes, links, onEchoLongPress, onEmptyTap, onReset])
+  }, [combinedNodes, links, onEchoLongPress, onEmptyTap, onReset])
+
+  useEffect(() => {
+    const validIds = new Set(combinedNodes.map((node) => node.id))
+    setSelection((previous) => previous.filter((id) => validIds.has(id)))
+  }, [combinedNodes])
+
+  useEffect(() => {
+    if (selection.length === 2) {
+      const [first, second] = selection
+      const a = combinedNodes.find((node) => node.id === first)
+      const b = combinedNodes.find((node) => node.id === second)
+      if (a && b) {
+        setResonance({ pair: selection, text: craftResonanceEcho(a, b) })
+      } else {
+        setResonance(null)
+      }
+    } else {
+      setResonance(null)
+    }
+  }, [selection, combinedNodes])
+
+  useEffect(() => {
+    resonanceStateRef.current = resonance
+    if (!resonance && resonanceRef.current) {
+      resonanceRef.current.group.setAttribute('opacity', '0')
+    }
+  }, [resonance])
+
+  useEffect(() => {
+    const { nodeAPI, linkAPI } = graphAPIRef.current
+    if (!nodeAPI || !linkAPI) return undefined
+
+    if (selection.length === 2) {
+      nodeAPI.focusPair(selection)
+      linkAPI.highlightPair(selection)
+    } else if (selection.length === 1) {
+      nodeAPI.focusNode(selection[0])
+      linkAPI.highlightNode(selection[0])
+    } else {
+      nodeAPI.resetHighlight()
+      linkAPI.reset()
+    }
+
+    return undefined
+  }, [selection])
 
   return (
     <div
@@ -422,7 +601,7 @@ export default function CosmoGraph({
     >
       {debug && (
         <p style={{ margin: '8px 12px', color: '#94a3b8', fontSize: '13px' }}>
-          Debug : {nodes.length} nœuds, {links.length} liens
+          Debug : {combinedNodes.length} nœuds, {links.length} liens
         </p>
       )}
     </div>

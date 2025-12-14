@@ -16,15 +16,15 @@ body {
     radial-gradient(circle at 80% 10%, rgba(236, 72, 153, 0.06), transparent 30%),
     #030712;
   min-height: 100vh;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 .app-shell {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 12px;
-  gap: 12px;
+  padding: 10px;
+  gap: 10px;
   background: linear-gradient(180deg, rgba(3, 7, 18, 0.9) 0%, rgba(3, 7, 18, 0.96) 100%);
 }
 
@@ -68,7 +68,7 @@ body {
 .sky {
   position: relative;
   flex: 1;
-  min-height: 80vh;
+  min-height: 60vh;
   border-radius: 18px;
   background: radial-gradient(circle at 50% 30%, rgba(59, 130, 246, 0.08), rgba(14, 116, 144, 0.06)),
     linear-gradient(180deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 0.82) 100%);
@@ -88,8 +88,8 @@ body {
   position: relative;
   width: 100%;
   height: 100%;
-  min-height: 420px;
-  padding: 12px;
+  min-height: 360px;
+  padding: 10px;
 }
 
 .murmur {
@@ -248,4 +248,31 @@ textarea:focus {
   display: grid;
   gap: 8px;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .sky {
+    min-height: 65vh;
+  }
+
+  .graph-stage {
+    min-height: 320px;
+    padding: 8px;
+  }
+
+  .murmur {
+    font-size: 14px;
+    bottom: 10px;
+  }
+
+  .input-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+  }
 }

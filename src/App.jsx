@@ -4,6 +4,7 @@ import CosmoGraph from './components/CosmoGraph'
 
 const MOCK_GRAPH = {
   nodes: [
+    { id: 'cosmobulle', label: 'Cosmobulle', emoji: '🪨', level: 'metaphor' },
     { id: 'calme', label: 'Calme', emoji: '🌙', level: 'emoji' },
     { id: 'elan', label: 'Élan', emoji: '🚀', level: 'emoji' },
     { id: 'racines', label: 'Racines', emoji: '🌳', level: 'emoji' },
@@ -13,6 +14,13 @@ const MOCK_GRAPH = {
     { id: 'etoile', label: 'Étoile', emoji: '✨', level: 'emoji' },
   ],
   links: [
+    { source: 'cosmobulle', target: 'calme', weight: 0.9 },
+    { source: 'cosmobulle', target: 'elan', weight: 0.85 },
+    { source: 'cosmobulle', target: 'racines', weight: 0.9 },
+    { source: 'cosmobulle', target: 'vague', weight: 0.85 },
+    { source: 'cosmobulle', target: 'braise', weight: 0.82 },
+    { source: 'cosmobulle', target: 'plume', weight: 0.8 },
+    { source: 'cosmobulle', target: 'etoile', weight: 0.78 },
     { source: 'calme', target: 'elan', weight: 0.6 },
     { source: 'calme', target: 'racines', weight: 0.9 },
     { source: 'racines', target: 'braise', weight: 0.8 },
@@ -24,6 +32,20 @@ const MOCK_GRAPH = {
     { source: 'calme', target: 'plume', weight: 0.55 },
     { source: 'vague', target: 'elan', weight: 0.65 },
   ],
+}
+
+const TAG_MAPPINGS = {
+  calme: { emoji: '🌙', tags: ['apaisement', 'nuit', 'respiration'] },
+  elan: { emoji: '🚀', tags: ['démarrage', 'audace', 'mouvement'] },
+  racines: { emoji: '🌳', tags: ['ancrage', 'mémoire', 'famille'] },
+  vague: { emoji: '🌊', tags: ['flux', 'lâcher prise', 'cycle'] },
+  braise: { emoji: '🔥', tags: ['envie', 'passion', 'chaleur'] },
+  plume: { emoji: '🪶', tags: ['léger', 'écrire', 'brise'] },
+  etoile: { emoji: '✨', tags: ['guide', 'éclat', 'voeu'] },
+  joie: { emoji: '🌞', tags: ['lumière', 'élan', 'danse'] },
+  pluie: { emoji: '🌧️', tags: ['lavage', 'renouveau', 'odeur de terre'] },
+  vent: { emoji: '🌬️', tags: ['souffle', 'direction', 'mouvement'] },
+  pierre: { emoji: '🪨', tags: ['solidité', 'appui', 'gravité'] },
 }
 
 const PUNCHLINE_LIBRARY = {
@@ -64,7 +86,61 @@ const PUNCHLINE_LIBRARY = {
   ],
 }
 
-const DEFAULT_TEXT = 'Dépose ce qui te traverse : mots, sensations, emojis…'
+const DEFAULT_TEXT = ''
+
+function metabolizeTextToGraph(text, graph) {
+  const cleaned = text.toLowerCase()
+  const tokens = cleaned.split(/[^a-zà-ÿœæ0-9]+/i).filter(Boolean)
+  const foundKeys = Object.keys(TAG_MAPPINGS).filter((key) => cleaned.includes(key))
+
+  const nextNodes = new Map(graph.nodes.map((node) => [node.id, node]))
+  const nextLinks = new Map(graph.links.map((link, index) => [`${link.source}-${link.target}-${index}`, link]))
+
+  const ensureLink = (source, target, weight = 0.6) => {
+    const id = `${source}-${target}`
+    if (![...nextLinks.values()].some((l) => l.source === source && l.target === target)) {
+      nextLinks.set(id, { source, target, weight })
+    }
+  }
+
+  foundKeys.forEach((key) => {
+    const mapping = TAG_MAPPINGS[key]
+    const emojiId = key
+    if (!nextNodes.has(emojiId)) {
+      nextNodes.set(emojiId, { id: emojiId, label: key.charAt(0).toUpperCase() + key.slice(1), emoji: mapping.emoji, level: 'emoji' })
+      ensureLink('cosmobulle', emojiId, 0.8)
+    }
+
+    mapping.tags.forEach((tag) => {
+      const tagId = `${emojiId}-${tag}`
+      if (!nextNodes.has(tagId)) {
+        nextNodes.set(tagId, { id: tagId, label: tag, level: 'tag' })
+      }
+      ensureLink(emojiId, tagId, 0.7)
+    })
+  })
+
+  if (foundKeys.length > 1) {
+    for (let i = 0; i < foundKeys.length; i += 1) {
+      for (let j = i + 1; j < foundKeys.length; j += 1) {
+        ensureLink(foundKeys[i], foundKeys[j], 0.75)
+      }
+    }
+  }
+
+  if (!foundKeys.length && tokens.length) {
+    const fallbackId = `murmure-${Date.now()}`
+    nextNodes.set(fallbackId, {
+      id: fallbackId,
+      label: tokens.slice(0, 2).join(' '),
+      emoji: '🫧',
+      level: 'echo',
+    })
+    ensureLink('cosmobulle', fallbackId, 0.5)
+  }
+
+  return { nodes: Array.from(nextNodes.values()), links: Array.from(nextLinks.values()) }
+}
 
 function App() {
   const [entered, setEntered] = useState(false)
@@ -73,24 +149,37 @@ function App() {
   const [suggestions, setSuggestions] = useState([])
   const [selectedPunchlines, setSelectedPunchlines] = useState([])
   const [activeEmoji, setActiveEmoji] = useState(null)
-
-  const mockGraph = useMemo(() => MOCK_GRAPH, [])
+  const [graphData, setGraphData] = useState(MOCK_GRAPH)
 
   const handleSubmit = (event) => {
     event.preventDefault()
     const text = sourceDraft.trim()
     if (!text) return
+    setGraphData((prev) => metabolizeTextToGraph(text, prev))
     setMurmur('Mots déposés. Les bulles s’en souviendront.')
+    setSourceDraft('')
   }
 
   const handleEmojiTap = (node) => {
     setActiveEmoji(node.id)
     setMurmur(`${node.emoji || '✨'} ${node.label}`)
-    const lines = PUNCHLINE_LIBRARY[node.id] || [
-      `${node.emoji || '✨'} ${node.label} ouvre une image.`,
-      `${node.emoji || '✨'} ${node.label} cherche une rime.`,
-      `${node.emoji || '✨'} ${node.label} attend ta voix.`,
-    ]
+    const tagLines = graphData.links
+      .filter((link) => link.source === node.id || link.target === node.id)
+      .map((link) => (link.source === node.id ? link.target : link.source))
+      .map((id) => graphData.nodes.find((n) => n.id === id))
+      .filter((n) => n?.level === 'tag')
+      .slice(0, 3)
+      .map((tagNode) => `${node.emoji || '✨'} ${node.label} · ${tagNode.label}`)
+
+    const fallback = tagLines.length
+      ? tagLines
+      : [
+          `${node.emoji || '✨'} ${node.label} ouvre une image.`,
+          `${node.emoji || '✨'} ${node.label} cherche une rime.`,
+          `${node.emoji || '✨'} ${node.label} attend ta voix.`,
+        ]
+
+    const lines = PUNCHLINE_LIBRARY[node.id] || fallback
     setSuggestions(lines)
   }
 
@@ -140,8 +229,8 @@ function App() {
         <div className="halo" aria-hidden />
         <div className="graph-stage">
           <CosmoGraph
-            nodes={mockGraph.nodes}
-            links={mockGraph.links}
+            nodes={graphData.nodes}
+            links={graphData.links}
             onMurmur={setMurmur}
             onEmptyTap={handleEmptyTap}
             onReset={handleEmptyTap}
@@ -203,7 +292,7 @@ function App() {
           rows={3}
           onChange={(event) => setSourceDraft(event.target.value)}
           aria-label="Zone de texte pour déposer les mots"
-          placeholder="Dépose ce qui te traverse : mots, sensations, emojis…"
+          placeholder="Ajoute tes mots à faire échobuller•°"
         />
         <div className="bar-actions">
           <button type="submit" className="primary">

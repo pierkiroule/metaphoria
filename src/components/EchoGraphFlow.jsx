@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Component, useEffect, useMemo, useRef, useState } from 'react'
 import { adaptGraphToFlow } from '../lib/graphAdapter'
 import { ensureFlowStyles, loadFlowClient } from '../lib/flowLoader'
 
@@ -155,6 +155,29 @@ function GraphFallback({ status }) {
   )
 }
 
+class GraphBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error) {
+    console.error('Graph rendering failed', error)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <GraphFallback status="error" />
+    }
+
+    return this.props.children
+  }
+}
+
 export function EchoGraphFlow(props) {
   const [flowLib, setFlowLib] = useState(null)
   const [flowStatus, setFlowStatus] = useState('loading')
@@ -186,8 +209,10 @@ export function EchoGraphFlow(props) {
   const { ReactFlowProvider } = flowLib
 
   return (
-    <ReactFlowProvider>
-      <FlowCanvas {...props} flowLib={flowLib} />
-    </ReactFlowProvider>
+    <GraphBoundary>
+      <ReactFlowProvider>
+        <FlowCanvas {...props} flowLib={flowLib} />
+      </ReactFlowProvider>
+    </GraphBoundary>
   )
 }

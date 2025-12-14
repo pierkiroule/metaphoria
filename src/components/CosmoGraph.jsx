@@ -236,6 +236,33 @@ export function drawNodes(layer, nodes, handlers = {}) {
     return { group, circle, node }
   })
 
+  const applyFocusView = ({ focusedId, visibleTags }) => {
+    const tagSet = visibleTags ?? new Set()
+    nodeElements.forEach(({ circle, node }) => {
+      if (node.level === 'tag') {
+        const isVisible = focusedId && tagSet.has(node.id)
+        circle.setAttribute('opacity', isVisible ? '0.9' : focusedId ? '0.02' : '0.06')
+        circle.setAttribute('stroke-width', isVisible ? '3' : circle.dataset.baseStrokeWidth)
+        circle.setAttribute(
+          'stroke',
+          isVisible ? 'rgba(96,165,250,0.65)' : circle.dataset.baseStroke || 'rgba(226,232,240,0.12)'
+        )
+        return
+      }
+
+      if (focusedId) {
+        const isTarget = node.id === focusedId
+        circle.setAttribute('opacity', isTarget ? '1' : '0.2')
+        circle.setAttribute('stroke-width', isTarget ? '8' : circle.dataset.baseStrokeWidth)
+        circle.setAttribute('stroke', isTarget ? 'rgba(255,255,255,0.35)' : circle.dataset.baseStroke)
+      } else {
+        circle.setAttribute('opacity', node.level === 'echo' ? '0.65' : '0.95')
+        circle.setAttribute('stroke-width', node.level === 'metaphor' ? '6' : '2')
+        circle.setAttribute('stroke', node.level === 'metaphor' ? 'rgba(251,191,36,0.55)' : 'rgba(226,232,240,0.12)')
+      }
+    })
+  }
+
   const focusNode = (nodeId) => {
     nodeElements.forEach(({ circle, node }) => {
       const isTarget = node.id === nodeId
@@ -282,7 +309,7 @@ export function drawNodes(layer, nodes, handlers = {}) {
     })
   }
 
-  return { updatePositions, focusNode, focusPair, resetHighlight, pulse }
+  return { updatePositions, focusNode, focusPair, resetHighlight, pulse, applyFocusView }
 }
 
 export default function CosmoGraph({
@@ -302,11 +329,31 @@ export default function CosmoGraph({
   const resonanceRef = useRef(null)
   const resonanceStateRef = useRef(null)
   const graphAPIRef = useRef({})
+  const focusRef = useRef(null)
+  const focusTagsRef = useRef([])
   const [selection, setSelection] = useState([])
   const [resonance, setResonance] = useState(null)
   const [stableEchoes, setStableEchoes] = useState([])
+  const [focusedEmoji, setFocusedEmoji] = useState(null)
 
   const combinedNodes = useMemo(() => [...nodes, ...stableEchoes], [nodes, stableEchoes])
+  const nodeMap = useMemo(() => new Map(combinedNodes.map((node) => [node.id, node])), [combinedNodes])
+
+  const focusTagIds = useMemo(() => {
+    if (!focusedEmoji) return []
+    const set = new Set()
+    links.forEach((link) => {
+      if (link.source === focusedEmoji) {
+        const target = nodeMap.get(link.target)
+        if (target?.level === 'tag') set.add(target.id)
+      }
+      if (link.target === focusedEmoji) {
+        const source = nodeMap.get(link.source)
+        if (source?.level === 'tag') set.add(source.id)
+      }
+    })
+    return Array.from(set)
+  }, [focusedEmoji, links, nodeMap])
 
   useEffect(() => {
     const el = containerRef.current
@@ -364,6 +411,7 @@ export default function CosmoGraph({
         linkAPI.reset()
         nodeAPI.focusNode(node.id)
         linkAPI.highlightNode(node.id)
+        if (node.level !== 'tag') setFocusedEmoji(node.id)
       },
       onLongPress: (node) => {
         nodeAPI.focusNode(node.id)
@@ -392,6 +440,10 @@ export default function CosmoGraph({
     )
     resonanceRef.current = { group: resonanceGroup, text: resonanceText, circle: resonanceCircle }
     graphAPIRef.current = { nodeAPI, linkAPI }
+
+    focusRef.current = focusedEmoji
+    focusTagsRef.current = focusTagIds
+    nodeAPI.applyFocusView({ focusedId: focusRef.current, visibleTags: new Set(focusTagsRef.current) })
 
     let resonancePress
 
@@ -424,6 +476,7 @@ export default function CosmoGraph({
       linkAPI.reset()
       setSelection([])
       setResonance(null)
+      setFocusedEmoji(null)
       onReset?.()
     }
 
@@ -431,6 +484,24 @@ export default function CosmoGraph({
       try {
         const positioned = computeOrbitalPositions(combinedNodes, width, height, timestamp)
         const posMap = new Map(positioned.map((node) => [node.id, node]))
+
+        const focusedId = focusRef.current
+        const visibleTags = focusTagsRef.current || []
+        if (focusedId && visibleTags.length) {
+          const focusPos = posMap.get(focusedId)
+          if (focusPos) {
+            const total = visibleTags.length
+            visibleTags.forEach((tagId, index) => {
+              const pos = posMap.get(tagId)
+              if (!pos) return
+              const angle = (2 * Math.PI * index) / total + timestamp * 0.0012
+              const localRadius = 70 + Math.sin(timestamp * 0.001 + index) * 6
+              pos.x = focusPos.x + localRadius * Math.cos(angle)
+              pos.y = focusPos.y + localRadius * Math.sin(angle)
+              posMap.set(tagId, pos)
+            })
+          }
+        }
 
         linkAPI.updatePositions(posMap)
         nodeAPI.updatePositions(posMap)
@@ -560,6 +631,20 @@ export default function CosmoGraph({
   }, [selection, combinedNodes])
 
   useEffect(() => {
+    focusRef.current = focusedEmoji
+    focusTagsRef.current = focusTagIds
+    const { nodeAPI, linkAPI } = graphAPIRef.current
+    nodeAPI?.applyFocusView({ focusedId: focusedEmoji, visibleTags: new Set(focusTagIds) })
+    if (!selection.length) {
+      if (focusedEmoji) {
+        linkAPI?.highlightNode(focusedEmoji)
+      } else {
+        linkAPI?.reset()
+      }
+    }
+  }, [focusedEmoji, focusTagIds, selection.length])
+
+  useEffect(() => {
     resonanceStateRef.current = resonance
     if (!resonance && resonanceRef.current) {
       resonanceRef.current.group.setAttribute('opacity', '0')
@@ -577,12 +662,16 @@ export default function CosmoGraph({
       nodeAPI.focusNode(selection[0])
       linkAPI.highlightNode(selection[0])
     } else {
-      nodeAPI.resetHighlight()
-      linkAPI.reset()
+      nodeAPI.applyFocusView({ focusedId: focusedEmoji, visibleTags: new Set(focusTagIds) })
+      if (focusedEmoji) {
+        linkAPI.highlightNode(focusedEmoji)
+      } else {
+        linkAPI.reset()
+      }
     }
 
     return undefined
-  }, [selection])
+  }, [selection, focusedEmoji, focusTagIds])
 
   return (
     <div
@@ -596,9 +685,20 @@ export default function CosmoGraph({
         borderRadius: '8px',
         overflow: 'hidden',
         touchAction: 'manipulation',
+        position: 'relative',
       }}
       aria-live="polite"
     >
+      {focusedEmoji && (
+        <button
+          type="button"
+          className="graph-back"
+          aria-label="Revenir à la vue globale"
+          onClick={() => setFocusedEmoji(null)}
+        >
+          ← Retour
+        </button>
+      )}
       {debug && (
         <p style={{ margin: '8px 12px', color: '#94a3b8', fontSize: '13px' }}>
           Debug : {combinedNodes.length} nœuds, {links.length} liens

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import './App.css'
 import { generateResonantMorphosis } from './resonantMorphosis'
 import CosmoGraph from './components/CosmoGraph'
+import OverlayEcho from './components/OverlayEcho'
 
 const DEFAULT_TEXT = "Je suis fatigué, tout me semble lourd et je n’avance plus."
 
@@ -50,10 +51,12 @@ function App() {
           <CosmoGraph
             nodes={morphosis.graphNodes}
             links={morphosis.graphLinks}
-            onEchoSelect={setEchoOverlay}
+            onEchoLongPress={setEchoOverlay}
+            onEmptyTap={() => setEchoOverlay('')}
+            onReset={() => setEchoOverlay('')}
             debug={debug}
           />
-          {echoOverlay && <div className="echo-overlay">{echoOverlay}</div>}
+          <OverlayEcho text={echoOverlay} onClose={() => setEchoOverlay('')} />
         </div>
       </div>
 

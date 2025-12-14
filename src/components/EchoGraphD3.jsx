@@ -228,20 +228,24 @@ function EchoGraphD3({
 
     updateTagVisibility(currentZoom)
 
-    const resizeObserver = new ResizeObserver((entries) => {
-      const entry = entries[0]
-      if (!entry) return
-      const { width: nextWidth, height: nextHeight } = entry.contentRect
-      if (!nextWidth || !nextHeight) return
+    let resizeObserver
 
-      width = nextWidth
-      height = nextHeight
-      svg.attr('width', width).attr('height', height)
-      simulation.force('center', d3.forceCenter(width / 2, height / 2))
-      simulation.alpha(0.5).restart()
-    })
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver((entries) => {
+        const entry = entries[0]
+        if (!entry) return
+        const { width: nextWidth, height: nextHeight } = entry.contentRect
+        if (!nextWidth || !nextHeight) return
 
-    resizeObserver.observe(wrapperEl)
+        width = nextWidth
+        height = nextHeight
+        svg.attr('width', width).attr('height', height)
+        simulation.force('center', d3.forceCenter(width / 2, height / 2))
+        simulation.alpha(0.5).restart()
+      })
+
+      resizeObserver.observe(wrapperEl)
+    }
 
     const handleWindowResize = () => {
       const rect = wrapperEl.getBoundingClientRect()
@@ -257,7 +261,7 @@ function EchoGraphD3({
 
     return () => {
       window.removeEventListener('resize', handleWindowResize)
-      resizeObserver.disconnect()
+      if (resizeObserver) resizeObserver.disconnect()
       simulation.stop()
       svg.selectAll('*').remove()
     }

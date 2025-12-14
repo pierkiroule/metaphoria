@@ -380,6 +380,45 @@ body {
   display: none;
 }
 
+.graph-loader {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  background: radial-gradient(circle at 35% 35%, rgba(26, 26, 32, 0.78), rgba(12, 12, 16, 0.92));
+  color: inherit;
+  text-align: center;
+  padding: 18px;
+}
+
+.theme-light .graph-loader {
+  background: radial-gradient(circle at 35% 35%, rgba(244, 244, 244, 0.9), rgba(232, 232, 240, 0.92));
+}
+
+.graph-loader-ring {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.24);
+  border-top-color: rgba(255, 255, 255, 0.9);
+  animation: spin 1.2s linear infinite;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+
+.theme-light .graph-loader-ring {
+  border: 3px solid rgba(0, 0, 0, 0.14);
+  border-top-color: rgba(0, 0, 0, 0.6);
+}
+
+.graph-loader-text {
+  font-size: 14px;
+  opacity: 0.9;
+  max-width: 260px;
+}
+
 .graph-overlay {
   position: absolute;
   inset: 12px 12px auto 12px;
@@ -876,6 +915,15 @@ body {
   }
   100% {
     transform: scale(1);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
   }
 }
 

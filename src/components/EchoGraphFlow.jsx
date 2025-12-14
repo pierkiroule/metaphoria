@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  Background,
-  Controls,
-  ReactFlow,
-  ReactFlowProvider,
-  useEdgesState,
-  useNodesState,
-  useReactFlow,
-} from '@xyflow/react'
-import '@xyflow/react/dist/style.css'
 import { adaptGraphToFlow } from '../lib/graphAdapter'
+import { ensureFlowStyles, loadFlowClient } from '../lib/flowLoader'
 
 const fitViewOptions = { padding: 0.24, duration: 420 }
 
-function EchoGraphFlowInner({ nodes = [], links = [], onFocusNode, onSelectionChange, selectedIds = [] }) {
+function FlowCanvas({
+  flowLib,
+  nodes = [],
+  links = [],
+  onFocusNode,
+  onSelectionChange,
+  selectedIds = [],
+}) {
+  const { Background, Controls, ReactFlow, useEdgesState, useNodesState, useReactFlow } = flowLib
+
   const wrapperRef = useRef(null)
   const resizeFallbackAppliedRef = useRef(false)
   const { fitView } = useReactFlow()
@@ -27,7 +27,10 @@ function EchoGraphFlowInner({ nodes = [], links = [], onFocusNode, onSelectionCh
     [nodeLookup, selectedIds],
   )
 
-  const flowGraph = useMemo(() => adaptGraphToFlow(nodes, links, size), [links, nodes, size.height, size.width])
+  const flowGraph = useMemo(
+    () => adaptGraphToFlow(nodes, links, size),
+    [links, nodes, size.height, size.width],
+  )
 
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState(flowGraph.nodes)
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState(flowGraph.edges)
@@ -127,7 +130,9 @@ function EchoGraphFlowInner({ nodes = [], links = [], onFocusNode, onSelectionCh
 
       <div className="graph-overlay">
         <div className="graph-state">
-          {emptyState ? 'Dépose des mots pour tracer une constellation.' : 'Tap = focus · Double tap = sélectionner · Pinch = zoom · Double tap vide = recentrer'}
+          {emptyState
+            ? 'Dépose des mots pour tracer une constellation.'
+            : 'Tap = focus · Double tap = sélectionner · Pinch = zoom · Double tap vide = recentrer'}
         </div>
         {resizeFallbackAppliedRef.current && (
           <div className="graph-state minor">ResizeObserver absent · taille figée</div>
@@ -137,11 +142,52 @@ function EchoGraphFlowInner({ nodes = [], links = [], onFocusNode, onSelectionCh
   )
 }
 
-export function EchoGraphFlow(props) {
+function GraphFallback({ status }) {
   return (
-    <ReactFlowProvider>
-      <EchoGraphFlowInner {...props} />
-    </ReactFlowProvider>
+    <div className="graph-wrapper graph-loader">
+      <div className="graph-loader-ring" aria-hidden />
+      <p className="graph-loader-text">
+        {status === 'error'
+          ? 'Chargement du graphe indisponible. Vérifie la connexion.'
+          : 'Chargement du moteur de graphe...'}
+      </p>
+    </div>
   )
 }
 
+export function EchoGraphFlow(props) {
+  const [flowLib, setFlowLib] = useState(null)
+  const [flowStatus, setFlowStatus] = useState('loading')
+
+  useEffect(() => {
+    ensureFlowStyles()
+    let mounted = true
+
+    loadFlowClient()
+      .then((module) => {
+        if (!mounted) return
+        setFlowLib(module)
+        setFlowStatus('ready')
+      })
+      .catch((error) => {
+        console.error('React Flow load failed', error)
+        if (mounted) setFlowStatus('error')
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  if (!flowLib) {
+    return <GraphFallback status={flowStatus} />
+  }
+
+  const { ReactFlowProvider } = flowLib
+
+  return (
+    <ReactFlowProvider>
+      <FlowCanvas {...props} flowLib={flowLib} />
+    </ReactFlowProvider>
+  )
+}

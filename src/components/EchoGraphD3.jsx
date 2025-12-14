@@ -1,22 +1,61 @@
 import { useEffect, useRef } from 'react'
 import * as d3 from 'd3'
 
-const defaultNodes = [
-  { id: 'fatigue', label: 'Fatigue' },
-  { id: 'lenteur', label: 'Lenteur' },
-  { id: 'nuit', label: 'Nuit' },
-  { id: 'souffle', label: 'Souffle' },
+const defaultEmojiNodes = [
+  {
+    id: 'emoji-🫧',
+    emoji: '🫧',
+    count: 12,
+    tags: ['transformation', 'fragilité', 'passage', 'lent'],
+  },
+  {
+    id: 'emoji-🌫️',
+    emoji: '🌫️',
+    count: 6,
+    tags: ['flou', 'lenteur', 'crépuscule'],
+  },
+  {
+    id: 'emoji-🌱',
+    emoji: '🌱',
+    count: 4,
+    tags: ['éveil', 'germer', 'départ'],
+  },
+  {
+    id: 'emoji-✨',
+    emoji: '✨',
+    count: 3,
+    tags: ['éclat', 'impulsion'],
+  },
 ]
 
-const defaultLinks = [
-  { source: 'fatigue', target: 'lenteur' },
-  { source: 'fatigue', target: 'nuit' },
-  { source: 'souffle', target: 'lenteur' },
+const defaultEmojiLinks = [
+  { source: 'emoji-🫧', target: 'emoji-🌫️', weight: 7 },
+  { source: 'emoji-🫧', target: 'emoji-🌱', weight: 3 },
+  { source: 'emoji-🌫️', target: 'emoji-🌱', weight: 2 },
+  { source: 'emoji-🫧', target: 'emoji-✨', weight: 2 },
 ]
 
-function EchoGraphD3({ nodes = defaultNodes, links = defaultLinks, onNodeTap }) {
+function EchoGraphD3({
+  emojiNodes = defaultEmojiNodes,
+  emojiLinks = defaultEmojiLinks,
+  tagNodes: providedTagNodes,
+  onNodeTap,
+}) {
   const svgRef = useRef(null)
   const wrapperRef = useRef(null)
+  const focusRef = useRef(null)
+
+  // Build tag nodes if the caller does not pass any.
+  const tagNodes =
+    providedTagNodes ||
+    emojiNodes.flatMap((emoji) =>
+      (emoji.tags || []).map((tag, index) => ({
+        id: `tag-${emoji.emoji}-${tag}`,
+        label: `#${tag}`,
+        emojiParent: emoji.id,
+        count: Math.max(1, (emoji.count || 1) - index),
+      })),
+    )
 
   useEffect(() => {
     const svgEl = svgRef.current
@@ -24,8 +63,20 @@ function EchoGraphD3({ nodes = defaultNodes, links = defaultLinks, onNodeTap }) 
     if (!svgEl || !wrapperEl) return undefined
 
     // Clone data so the simulation can adjust positions freely.
-    const nodesData = nodes.map((node) => ({ ...node }))
-    const linksData = links.map((link) => ({ ...link }))
+    const emojiData = emojiNodes.map((node) => ({ ...node, type: 'emoji' }))
+    const tagData = tagNodes.map((node) => ({ ...node, type: 'tag' }))
+
+    const nodesData = [...emojiData, ...tagData]
+
+    const linksData = [
+      ...emojiLinks.map((link) => ({ ...link, type: 'emoji-link' })),
+      ...tagData.map((tag) => ({
+        source: tag.emojiParent,
+        target: tag.id,
+        weight: Math.max(1, tag.count || 1),
+        type: 'tag-link',
+      })),
+    ]
 
     const svg = d3.select(svgEl)
     svg.selectAll('*').remove()
@@ -37,46 +88,101 @@ function EchoGraphD3({ nodes = defaultNodes, links = defaultLinks, onNodeTap }) 
 
     const container = svg.append('g')
 
+    const radiusScale = d3
+      .scaleSqrt()
+      .domain([1, d3.max(emojiData, (d) => d.count || 1) || 1])
+      .range([44, 82])
+
+    const tagRadiusScale = d3
+      .scaleSqrt()
+      .domain([1, d3.max(tagData, (d) => d.count || 1) || 1])
+      .range([12, 22])
+
     const simulation = d3
       .forceSimulation(nodesData)
-      .force('link', d3.forceLink(linksData).id((d) => d.id).distance(120))
-      .force('charge', d3.forceManyBody().strength(-200))
+      .force(
+        'link',
+        d3
+          .forceLink(linksData)
+          .id((d) => d.id)
+          .distance((d) => (d.type === 'tag-link' ? 90 : 140))
+          .strength((d) => (d.type === 'tag-link' ? 0.6 : 0.4)),
+      )
+      .force(
+        'charge',
+        d3
+          .forceManyBody()
+          .strength((d) => (d.type === 'tag' ? -20 : -320)),
+      )
       .force('center', d3.forceCenter(width / 2, height / 2))
+      .force('collision', d3.forceCollide().radius((d) =>
+        d.type === 'emoji' ? radiusScale(d.count || 1) + 8 : tagRadiusScale(d.count || 1) + 12,
+      ))
 
     const link = container
       .append('g')
       .attr('stroke', '#cbd5e1')
-      .attr('stroke-opacity', 0.9)
+      .attr('stroke-opacity', 0.85)
       .selectAll('line')
       .data(linksData)
       .join('line')
-      .attr('stroke-width', 1.2)
+      .attr('stroke-width', (d) => (d.type === 'emoji-link' ? 1.5 + (d.weight || 1) * 0.2 : 0.8))
+      .attr('stroke-dasharray', (d) => (d.type === 'tag-link' ? '4 3' : null))
 
-    const node = container
+    const emojiNodesSelection = container
       .append('g')
-      .selectAll('circle')
-      .data(nodesData)
-      .join('circle')
-      .attr('r', 16)
-      .attr('fill', '#60a5fa')
-      .attr('stroke', '#0ea5e9')
-      .attr('stroke-width', 1.5)
+      .selectAll('g')
+      .data(emojiData)
+      .join('g')
       .call(drag(simulation))
       .on('click', (_, d) => {
-        // Simple trace to confirm interaction is working.
+        focusRef.current = d.id
+        updateTagVisibility(currentZoom)
         if (onNodeTap) onNodeTap(d.id)
+        console.log('tap', d.id)
       })
 
-    const labels = container
-      .append('g')
-      .selectAll('text')
-      .data(nodesData)
-      .join('text')
-      .text((d) => d.label)
-      .attr('font-size', 12)
-      .attr('fill', '#0f172a')
+    emojiNodesSelection
+      .append('circle')
+      .attr('r', (d) => radiusScale(d.count || 1))
+      .attr('fill', '#e2f3ff')
+      .attr('stroke', '#0ea5e9')
+      .attr('stroke-width', 2)
+
+    emojiNodesSelection
+      .append('text')
       .attr('text-anchor', 'middle')
-      .attr('dy', 30)
+      .attr('dy', '0.35em')
+      .attr('font-size', (d) => Math.max(18, Math.min(32, radiusScale(d.count || 1))))
+      .text((d) => d.emoji)
+
+    const tagNodesSelection = container
+      .append('g')
+      .selectAll('g')
+      .data(tagData)
+      .join('g')
+      .call(drag(simulation))
+      .on('click', (_, d) => {
+        focusRef.current = d.emojiParent
+        updateTagVisibility(currentZoom)
+        if (onNodeTap) onNodeTap(d.id)
+        console.log('tap', d.id)
+      })
+
+    tagNodesSelection
+      .append('circle')
+      .attr('r', (d) => tagRadiusScale(d.count || 1))
+      .attr('fill', '#f8fafc')
+      .attr('stroke', '#94a3b8')
+      .attr('stroke-width', 1.4)
+
+    tagNodesSelection
+      .append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.35em')
+      .attr('font-size', 11)
+      .attr('fill', '#334155')
+      .text((d) => d.label)
 
     simulation.on('tick', () => {
       link
@@ -85,18 +191,42 @@ function EchoGraphD3({ nodes = defaultNodes, links = defaultLinks, onNodeTap }) 
         .attr('x2', (d) => d.target.x)
         .attr('y2', (d) => d.target.y)
 
-      node.attr('cx', (d) => d.x).attr('cy', (d) => d.y)
-      labels.attr('x', (d) => d.x).attr('y', (d) => d.y)
+      emojiNodesSelection.attr('transform', (d) => `translate(${d.x},${d.y})`)
+      tagNodesSelection.attr('transform', (d) => `translate(${d.x},${d.y})`)
     })
+
+    let currentZoom = 1
 
     const zoom = d3
       .zoom()
       .scaleExtent([0.5, 3])
       .on('zoom', (event) => {
+        currentZoom = event.transform.k
         container.attr('transform', event.transform)
+        updateTagVisibility(currentZoom)
       })
 
     svg.call(zoom)
+
+    function updateTagVisibility(zoomLevel) {
+      const showAllTags = zoomLevel >= 1.2
+      const focusedEmoji = focusRef.current
+
+      tagNodesSelection.attr('display', (d) => {
+        if (showAllTags) return null
+        if (focusedEmoji && d.emojiParent === focusedEmoji) return null
+        return 'none'
+      })
+
+      link.attr('opacity', (d) => {
+        if (d.type === 'emoji-link') return 0.85
+        if (showAllTags) return 0.6
+        if (focusedEmoji && d.source.id === focusedEmoji) return 0.45
+        return 0.15
+      })
+    }
+
+    updateTagVisibility(currentZoom)
 
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0]
@@ -131,7 +261,7 @@ function EchoGraphD3({ nodes = defaultNodes, links = defaultLinks, onNodeTap }) 
       simulation.stop()
       svg.selectAll('*').remove()
     }
-  }, [nodes, links, onNodeTap])
+  }, [emojiNodes, emojiLinks, tagNodes, onNodeTap])
 
   return (
     <div className="graph-wrapper" ref={wrapperRef}>

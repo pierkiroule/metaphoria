@@ -1,115 +1,64 @@
-import { useMemo, useState } from 'react'
 import './App.css'
 import EchoGraphD3 from './components/EchoGraphD3'
 
-const initialNodes = [
-  { id: 'fatigue', label: 'Fatigue' },
-  { id: 'lenteur', label: 'Lenteur' },
-  { id: 'nuit', label: 'Nuit' },
-  { id: 'souffle', label: 'Souffle' },
+const emojiNodes = [
+  {
+    id: 'emoji-🫧',
+    emoji: '🫧',
+    count: 12,
+    tags: ['transformation', 'fragilité', 'passage', 'lent'],
+  },
+  { id: 'emoji-🌫️', emoji: '🌫️', count: 7, tags: ['flou', 'lenteur', 'crépuscule'] },
+  { id: 'emoji-🌱', emoji: '🌱', count: 5, tags: ['éveil', 'germer', 'départ'] },
+  { id: 'emoji-✨', emoji: '✨', count: 3, tags: ['éclat', 'impulsion'] },
 ]
 
-const initialLinks = [
-  { source: 'fatigue', target: 'lenteur' },
-  { source: 'fatigue', target: 'nuit' },
-  { source: 'souffle', target: 'lenteur' },
+const emojiLinks = [
+  { source: 'emoji-🫧', target: 'emoji-🌫️', weight: 7 },
+  { source: 'emoji-🫧', target: 'emoji-🌱', weight: 3 },
+  { source: 'emoji-🌫️', target: 'emoji-🌱', weight: 2 },
+  { source: 'emoji-🫧', target: 'emoji-✨', weight: 2 },
 ]
 
 function App() {
-  const [nodes, setNodes] = useState(initialNodes)
-  const [links, setLinks] = useState(initialLinks)
-  const [word, setWord] = useState('')
-  const [focusId, setFocusId] = useState(null)
-
-  const focusedNode = useMemo(
-    () => nodes.find((node) => node.id === focusId),
-    [nodes, focusId],
-  )
-
-  const handleSubmit = (event) => {
-    event.preventDefault()
-    const raw = word.trim()
-    if (!raw) return
-
-    const id = raw.toLowerCase()
-    const exists = nodes.some((node) => node.id === id)
-
-    if (!exists) {
-      setNodes((prev) => [...prev, { id, label: raw }])
-      setLinks((prev) => {
-        const last = prev.length ? prev[prev.length - 1].target : null
-        const fallback = nodes.length ? nodes[nodes.length - 1].id : null
-        const connectFrom = last || fallback
-        if (!connectFrom) return prev
-        if (connectFrom === id) return prev
-        return [...prev, { source: connectFrom, target: id }]
-      })
-    }
-
-    setFocusId(id)
-    setWord('')
-  }
-
   return (
     <div className="page">
       <header className="hero">
         <div>
           <p className="eyebrow">EchoBulle</p>
-          <h1>Cosmobulle vivante</h1>
-          <p className="lede">
-            Bienvenue dans la cosmobulle. Ici, les mots deviennent des métabulles,
-            flottent, se touchent parfois, et résonnent quand on les écoute.
-          </p>
+          <h1>Cosmobulle</h1>
+          <p className="lede">Les emojis donnent le ton. Les tags racontent les détails.</p>
         </div>
-        <div className="hint">
-          Tapoter pour écouter · Double tap pour relier · Pincer pour zoomer · Glisser
-          pour flotter.
-        </div>
+        <p className="hint">
+          Les emojis montrent les tonalités. Les tags précisent les nuances. Zoome pour
+          écouter plus finement.
+        </p>
       </header>
 
       <main className="cosmobulle">
-        <div className="graph-card">
-          <EchoGraphD3 nodes={nodes} links={links} onNodeTap={setFocusId} />
-        </div>
+        <section className="graph-shell">
+          <EchoGraphD3 emojiNodes={emojiNodes} emojiLinks={emojiLinks} />
+          <div className="overlay-text">
+            <p className="title">✨ EchoBulle</p>
+            <p className="subtitle">Les métabulles vivent dans la cosmobulle.</p>
+            <p className="micro">Tap : écouter · Double tap : relier · Pincer : zoomer.</p>
+          </div>
+        </section>
 
-        <aside className="panel">
-          <section className="panel-section">
-            <h2>Dépose un mot</h2>
-            <form className="word-form" onSubmit={handleSubmit}>
-              <label className="sr-only" htmlFor="word">
-                Nouveau mot
-              </label>
-              <input
-                id="word"
-                value={word}
-                onChange={(e) => setWord(e.target.value)}
-                placeholder="Ajouter une métabulle..."
-                autoComplete="off"
-              />
-              <button type="submit">Lâcher</button>
-            </form>
-            <p className="microcopy">Une cosmobulle se nourrit mot après mot.</p>
-          </section>
-
-          <section className="panel-section">
-            <h3>Métabulles actives</h3>
-            <ul className="bubble-list">
-              {nodes.map((node) => (
-                <li key={node.id} className={node.id === focusId ? 'active' : ''}>
-                  {node.label}
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="panel-section">
-            <h3>Écho de la cosmobulle</h3>
-            {focusedNode ? (
-              <p className="echo">{focusedNode.label} cherche sa résonance.</p>
-            ) : (
-              <p className="echo">Choisis une métabulle pour l&apos;écouter.</p>
-            )}
-          </section>
+        <aside className="side-note">
+          <p className="accent">🫧 Cosmobulle</p>
+          <p className="body">
+            Les emojis sont les pôles de résonance. Taille minimale : 44px pour des
+            gestes sûrs. Leur taille reflète la présence. Les tags orbitent et
+            apparaissent au tap ou en zoom profond.
+          </p>
+          <p className="body">
+            Vue globale : emojis + liens. Vue focalisée : tags reliés. Une seule scène,
+            sans menu. La poésie se lit dans le geste.
+          </p>
+          <div className="quote">
+            <p>Les emojis donnent le ton. Les tags racontent les détails.</p>
+          </div>
         </aside>
       </main>
 

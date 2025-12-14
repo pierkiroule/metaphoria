@@ -45,6 +45,25 @@ function App() {
 
   return (
     <div className="app-shell">
+      <section className="intro-card" aria-label="Présentation ÉchoBulles">
+        <p className="eyebrow">🫧 ÉchoBulles · MétaphorIA</p>
+        <p className="lead">Un espace où les mots résonnent.</p>
+        <p>
+          Tu déposes des mots, des phrases, des sensations. Ils deviennent des métabulles. Les
+          métabulles flottent, se relient, vibrent. Elles dessinent une cosmobulle de résonance.
+        </p>
+        <p>
+          Pas d’analyse. Pas de jugement. Juste des échos métaphoriques. MétaphorIA transforme
+          doucement tes mots en images, tags et phrases poétiques pour t’aider à sentir ce qui
+          insiste.
+        </p>
+        <p>
+          Tout se passe localement, en sécurité. Rien n’est envoyé sans ton accord. ÉchoBulles
+          n’apporte pas de réponse. Elle ouvre un paysage intérieur.
+        </p>
+        <p className="lead">🫧 Entre dans la cosmobulle.</p>
+      </section>
+
       <div className="sky">
         <div className="halo" aria-hidden />
         <div className="graph-stage">

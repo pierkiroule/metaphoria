@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
-import { EchoGraph } from './EchoGraph'
+import { EchoGraphFlow } from './components/EchoGraphFlow'
 import { generateResonantMorphosis } from './resonantMorphosis'
 
 const DEVICE_WIDTH = 390
@@ -14,11 +14,21 @@ function App() {
   const [sourceDraft, setSourceDraft] = useState('Je suis fatigué, tout me semble lourd et je n’avance plus.')
   const [sourceText, setSourceText] = useState('Je suis fatigué, tout me semble lourd et je n’avance plus.')
   const [activeNode, setActiveNode] = useState(null)
+  const [selectedNodes, setSelectedNodes] = useState([])
   const [stage, setStage] = useState('home')
   const [pairEcho, setPairEcho] = useState('')
   const [cloudOn, setCloudOn] = useState(false)
+  const [styleChoice, setStyleChoice] = useState(baseStyles[0])
+  const [usageChoice, setUsageChoice] = useState(baseUsages[0])
 
   const morphosis = useMemo(() => generateResonantMorphosis(sourceText), [sourceText])
+
+  useEffect(() => {
+    setSelectedNodes([])
+    setActiveNode(null)
+    setPairEcho('')
+    setStage((current) => (current === 'home' ? 'home' : 'graph'))
+  }, [sourceText])
 
   const graphNodes = useMemo(() => {
     const styleNodes = baseStyles.map((style) => ({
@@ -54,15 +64,48 @@ function App() {
     return links
   }, [graphNodes, morphosis.graphLinks])
 
+  useEffect(() => {
+    setSelectedNodes((current) => current.filter((node) => graphNodes.some((item) => item.id === node.id)))
+  }, [graphNodes])
+
   const handleSubmit = (event) => {
     event.preventDefault()
     if (!sourceDraft.trim()) return
     setSourceText(sourceDraft)
     setStage('graph')
+    setActiveNode(null)
+    setSelectedNodes([])
+    setPairEcho('')
   }
 
-  const handleGenerateEcho = (pair) => {
-    if (pair.length < 2) return
+  const handleFocusNode = (node) => {
+    setActiveNode(node)
+    if (node) setStage('focus')
+  }
+
+  const handleSelectionChange = (items) => {
+    setSelectedNodes(items)
+    if (items.length) {
+      setActiveNode(items[items.length - 1])
+      setStage('focus')
+    }
+  }
+
+  const toggleSelection = (node) => {
+    if (!node) return
+    setSelectedNodes((current) => {
+      const exists = current.some((item) => item.id === node.id)
+      const updated = exists ? current.filter((item) => item.id !== node.id) : [...current, node].slice(-2)
+      if (updated.length) {
+        setActiveNode(updated[updated.length - 1])
+        setStage('focus')
+      }
+      return updated
+    })
+  }
+
+  const handleGenerateEcho = (pair = selectedNodes) => {
+    if (!pair || pair.length < 2) return
     const [a, b] = pair
     const combined = `Entre ${a.label} et ${b.label}, un fil discret se tend, prêt à porter un nouvel écho.`
     setPairEcho(combined)
@@ -135,75 +178,144 @@ function App() {
 
             <div className={`graph-zone ${stage === 'home' ? 'hidden' : ''}`} style={{ width: DEVICE_WIDTH }}>
               <div className="graph-cluster" aria-label="Zone graphique">
-                <EchoGraph
+                <EchoGraphFlow
                   nodes={graphNodes}
                   links={graphLinks}
-                  onSelectNode={(node) => {
-                    setActiveNode(node)
-                    setStage('focus')
-                  }}
-                  onGenerateEcho={handleGenerateEcho}
+                  selectedIds={selectedNodes.map((node) => node.id)}
+                  onFocusNode={handleFocusNode}
+                  onSelectionChange={handleSelectionChange}
                 />
               </div>
               <div className="graph-overlay-ui">
-                <span className="graph-pill">Tap = focus · Tap long = sélectionner · Pinch = zoom</span>
-                <a href="#" className="gear-btn" onClick={() => setStage('prompt')}>
+                <span className="graph-pill">Tap = focus · Double tap = sélectionner · Pinch = zoom</span>
+                <button type="button" className="gear-btn" onClick={() => setStage('prompt')} aria-label="Ouvrir la carte d’écho">
                   <i className="fa-solid fa-gear" />
-                </a>
-              </div>
-            </div>
-
-            <div className={`focus-card ${stage === 'focus' ? 'visible' : ''}`} style={{ width: DEVICE_WIDTH - 28 }}>
-              <div className="focus-icon" aria-hidden>
-                <i className="fa-solid fa-circle-nodes" />
-              </div>
-              <div className="focus-copy">
-                <p className="focus-title">🌫️ OMBRE / RETRAIT</p>
-                <p className="focus-quote">
-                  {activeNode ? `${activeNode.emoji || '⟡'} ${activeNode.label}` : 'Tap un nœud pour révéler son souffle.'}
-                </p>
-                <button type="button" className="echo-card-btn" onClick={() => setStage('prompt')}>
-                  Carte d’écho
                 </button>
               </div>
             </div>
 
-            <div className={`prompt-panel ${stage === 'prompt' ? 'visible' : ''}`} style={{ width: DEVICE_WIDTH }}>
-              <div className="prompt-header">
-                <h2>Prompt prêt (local)</h2>
-                <a href="#" className="close-link" onClick={() => setStage('graph')}>
-                  Fermer
-                </a>
-              </div>
-              <div className="prompt-grid">
-                <div className="prompt-field">
-                  <p className="field-label">Mots</p>
-                  <p className="field-value">{sourceText.slice(0, 40)}...</p>
+            <div className={`echo-panel ${stage !== 'home' ? 'visible' : ''}`} style={{ width: DEVICE_WIDTH }}>
+              <div className="panel-handle" aria-hidden />
+              <div className="panel-header">
+                <div>
+                  <p className="panel-kicker">{activeNode ? activeNode.type : 'Carte d’écho'}</p>
+                  <p className="panel-title">
+                    {activeNode
+                      ? `${activeNode.emoji || '⟡'} ${activeNode.label}`
+                      : 'Focus sur un nœud pour révéler son souffle'}
+                  </p>
                 </div>
-                <div className="prompt-field">
-                  <p className="field-label">Champ</p>
-                  <p className="field-value">{morphosis.dominantMetaphoricField}</p>
-                </div>
-                <div className="prompt-field">
-                  <p className="field-label">Style</p>
-                  <p className="field-value">cosmico-poétique</p>
-                </div>
-                <div className="prompt-field">
-                  <p className="field-label">Usage</p>
-                  <p className="field-value">atelier / médiation</p>
+                <div className="panel-actions">
+                  <button type="button" className="pill-btn" onClick={() => setStage('graph')}>
+                    <i className="fa-solid fa-circle-nodes" /> Graphe
+                  </button>
+                  <button type="button" className="pill-btn ghost" onClick={() => setStage('prompt')}>
+                    <i className="fa-solid fa-wand-magic-sparkles" /> Prompt
+                  </button>
                 </div>
               </div>
-              <div className="prompt-body">
-                <p className="field-label">Prompt généré</p>
-                <p className="prompt-text">{pairEcho || 'Sélectionne deux nœuds pour tisser un nouvel écho.'}</p>
-              </div>
-              <div className="cloud-row">
-                <div className="switch" role="switch" aria-checked={cloudOn} tabIndex={0} onClick={toggleCloud}>
-                  <div className={`thumb ${cloudOn ? 'on' : ''}`} />
+
+              {activeNode && (
+                <div className="panel-highlight">
+                  <p className="panel-emoji">{activeNode.emoji || '⟡'}</p>
+                  <div>
+                    <p className="panel-highlight-title">{activeNode.label}</p>
+                    <p className="panel-subline">Type : {activeNode.type}</p>
+                  </div>
                 </div>
-                <p className="switch-label">IA cloud {cloudOn ? 'ON' : 'OFF'}</p>
-                <i className={`fa-solid fa-cloud ${cloudOn ? 'pulse' : ''}`} aria-hidden />
-                <p className="cloud-message">{cloudOn ? 'Amplifier l’écho' : 'Local · rien transmis'}</p>
+              )}
+
+              {['metaphor', 'echo'].includes(activeNode?.type) && (
+                <div className="panel-tags">
+                  <p className="field-label">Tags / punchlines</p>
+                  <div className="tag-row">
+                    {morphosis.resonantTags.map((tag) => (
+                      <span key={tag} className="mini-chip">
+                        #{tag}
+                      </span>
+                    ))}
+                    {!morphosis.resonantTags.length && <span className="mini-chip muted">En attente</span>}
+                  </div>
+                </div>
+              )}
+
+              <div className="panel-controls">
+                <div className="chip-row">
+                  {baseStyles.map((style) => (
+                    <button
+                      key={style}
+                      type="button"
+                      className={`chip ${styleChoice === style ? 'active' : ''}`}
+                      onClick={() => setStyleChoice(style)}
+                    >
+                      <span>⟡</span> {style}
+                    </button>
+                  ))}
+                </div>
+                <div className="chip-row">
+                  {baseUsages.map((usage) => (
+                    <button
+                      key={usage}
+                      type="button"
+                      className={`chip ${usageChoice === usage ? 'active' : ''}`}
+                      onClick={() => setUsageChoice(usage)}
+                    >
+                      <span>⇄</span> {usage}
+                    </button>
+                  ))}
+                </div>
+                <div className="cloud-row">
+                  <div className="switch" role="switch" aria-checked={cloudOn} tabIndex={0} onClick={toggleCloud}>
+                    <div className={`thumb ${cloudOn ? 'on' : ''}`} />
+                  </div>
+                  <p className="switch-label">IA cloud {cloudOn ? 'ON' : 'OFF'}</p>
+                  <i className={`fa-solid fa-cloud ${cloudOn ? 'pulse' : ''}`} aria-hidden />
+                  <p className="cloud-message">{cloudOn ? 'Amplifier l’écho' : 'Local · rien transmis'}</p>
+                </div>
+              </div>
+
+              <div className="selection-row">
+                <button
+                  type="button"
+                  className="pill-btn"
+                  disabled={!activeNode}
+                  onClick={() => toggleSelection(activeNode)}
+                >
+                  {selectedNodes.some((item) => item.id === activeNode?.id) ? 'Retirer' : 'Sélectionner'}
+                </button>
+                <button
+                  type="button"
+                  className="pill-btn solid"
+                  disabled={selectedNodes.length !== 2}
+                  onClick={() => handleGenerateEcho(selectedNodes)}
+                >
+                  Générer un nouvel écho
+                </button>
+              </div>
+
+              <div className={`prompt-sheet ${stage === 'prompt' ? 'open' : ''}`}>
+                <div className="prompt-grid">
+                  <div className="prompt-field">
+                    <p className="field-label">Mots</p>
+                    <p className="field-value">{sourceText.slice(0, 40)}...</p>
+                  </div>
+                  <div className="prompt-field">
+                    <p className="field-label">Champ</p>
+                    <p className="field-value">{morphosis.dominantMetaphoricField}</p>
+                  </div>
+                  <div className="prompt-field">
+                    <p className="field-label">Style</p>
+                    <p className="field-value">{styleChoice}</p>
+                  </div>
+                  <div className="prompt-field">
+                    <p className="field-label">Usage</p>
+                    <p className="field-value">{usageChoice}</p>
+                  </div>
+                </div>
+                <div className="prompt-body">
+                  <p className="field-label">Prompt généré</p>
+                  <p className="prompt-text">{pairEcho || 'Sélectionne deux nœuds pour tisser un nouvel écho.'}</p>
+                </div>
               </div>
             </div>
 

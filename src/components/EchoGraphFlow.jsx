@@ -1,38 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Background,
+  Controls,
+  ReactFlow,
+  ReactFlowProvider,
+  useEdgesState,
+  useNodesState,
+  useReactFlow,
+} from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
 import { adaptGraphToFlow } from '../lib/graphAdapter'
 
 const fitViewOptions = { padding: 0.24, duration: 420 }
 
-async function loadReactFlow() {
-  try {
-    const module = await import(/* @vite-ignore */ 'https://esm.sh/reactflow@11.11.2')
-    return module
-  } catch (error) {
-    console.error('React Flow failed to load from CDN', error)
-    return null
-  }
-}
-
-function EchoGraphFlowInner({ nodes = [], links = [], onFocusNode, onSelectionChange, selectedIds = [], flow }) {
-  const ReactFlow = flow?.default
-  const Background = flow?.Background
-  const Controls = flow?.Controls
-  const ReactFlowProvider = flow?.ReactFlowProvider
-  const useEdgesState = flow?.useEdgesState
-  const useNodesState = flow?.useNodesState
-  const useReactFlow = flow?.useReactFlow
-
-  if (!ReactFlow || !Background || !Controls || !ReactFlowProvider || !useEdgesState || !useNodesState || !useReactFlow) {
-    return (
-      <div className="graph-wrapper">
-        <div className="graph-overlay">
-          <div className="graph-state">Chargement du moteur graphique…</div>
-          <div className="graph-state minor">Si l’attente dure, recharge ou vérifie ta connexion.</div>
-        </div>
-      </div>
-    )
-  }
-
+function EchoGraphFlowInner({ nodes = [], links = [], onFocusNode, onSelectionChange, selectedIds = [] }) {
   const wrapperRef = useRef(null)
   const resizeFallbackAppliedRef = useRef(false)
   const { fitView } = useReactFlow()
@@ -157,30 +138,10 @@ function EchoGraphFlowInner({ nodes = [], links = [], onFocusNode, onSelectionCh
 }
 
 export function EchoGraphFlow(props) {
-  const [flow, setFlow] = useState(null)
-
-  useEffect(() => {
-    let cancelled = false
-
-    loadReactFlow().then((module) => {
-      if (!cancelled) setFlow(module)
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  if (!flow) {
-    return <EchoGraphFlowInner {...props} flow={null} />
-  }
-
-  const Provider = flow.ReactFlowProvider
-
   return (
-    <Provider>
-      <EchoGraphFlowInner {...props} flow={flow} />
-    </Provider>
+    <ReactFlowProvider>
+      <EchoGraphFlowInner {...props} />
+    </ReactFlowProvider>
   )
 }
 
